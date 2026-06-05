@@ -171,6 +171,10 @@ const PAGE = `<!doctype html>
       <div class="meta" id="keyMeta"></div>
 
       <label>Modell</label>
+      <div class="row" style="margin-top:0">
+        <input id="freeOnly" type="checkbox">
+        <label style="margin:0">Nur Gratis-Modelle anzeigen</label>
+      </div>
       <select id="model"></select>
       <div class="meta" id="modelMeta"></div>
 
@@ -210,28 +214,40 @@ async function refresh() {
   } catch (e) { /* keep last state */ }
 }
 
+let ALL_MODELS = [];
+let SAVED_MODEL = '';
+let MODELS_ERR = null;
+
 async function loadModels(selected) {
-  const sel = $('model');
-  let models = [], err = null;
+  SAVED_MODEL = selected || '';
   try {
     const r = await (await fetch('/api/models')).json();
-    models = r.models || [];
-    err = r.error || null;
-  } catch (e) { err = e.message; }
-  // Keep the saved model selectable even if it's not (or no longer) in the list.
-  if (selected && !models.some((m) => m.id === selected))
-    models.unshift({ id: selected, name: selected });
+    ALL_MODELS = r.models || [];
+    MODELS_ERR = r.error || null;
+  } catch (e) { ALL_MODELS = []; MODELS_ERR = e.message; }
+  renderModels();
+}
+
+function renderModels() {
+  const sel = $('model');
+  const onlyFree = $('freeOnly').checked;
+  const current = sel.value || SAVED_MODEL;
+  let list = onlyFree ? ALL_MODELS.filter((m) => m.free) : ALL_MODELS.slice();
+  // Keep the saved/selected model usable even if the filter would hide it.
+  if (current && !list.some((m) => m.id === current)) {
+    list.unshift(ALL_MODELS.find((m) => m.id === current) || { id: current, name: current });
+  }
   sel.innerHTML = '';
-  for (const m of models) {
+  for (const m of list) {
     const o = document.createElement('option');
     o.value = m.id;
-    o.textContent = m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id;
+    o.textContent = (m.free ? '🆓 ' : '') + (m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id);
     sel.appendChild(o);
   }
-  if (selected) sel.value = selected;
-  $('modelMeta').textContent = err
+  if (current) sel.value = current;
+  $('modelMeta').textContent = MODELS_ERR
     ? 'Modell-Liste nicht erreichbar — gespeichertes Modell wird genutzt.'
-    : models.length + ' Modelle von OpenRouter';
+    : list.length + (onlyFree ? ' Gratis-Modelle' : ' Modelle') + ' von OpenRouter';
 }
 
 async function loadConfig() {
@@ -267,6 +283,8 @@ $('relink').addEventListener('click', async () => {
   if (!confirm('WhatsApp abmelden und neuen QR-Code anzeigen?')) return;
   await fetch('/api/relink', { method:'POST' });
 });
+
+$('freeOnly').addEventListener('change', renderModels);
 
 loadConfig();
 refresh();

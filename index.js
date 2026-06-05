@@ -99,7 +99,11 @@ async function getModels() {
   if (!resp.ok) throw new Error(`OpenRouter models ${resp.status}`);
   const data = await resp.json();
   const list = (data.data || [])
-    .map((m) => ({ id: m.id, name: m.name || m.id }))
+    .map((m) => {
+      const p = m.pricing || {};
+      const free = parseFloat(p.prompt || 0) === 0 && parseFloat(p.completion || 0) === 0;
+      return { id: m.id, name: m.name || m.id, free };
+    })
     .sort((a, b) => a.id.localeCompare(b.id));
   modelsCache = { at: now, list };
   return list;
