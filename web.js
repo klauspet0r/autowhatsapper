@@ -54,6 +54,16 @@ function startServer(hooks) {
         return;
       }
 
+      if (req.method === 'GET' && req.url === '/api/models') {
+        try {
+          const models = await hooks.getModels();
+          sendJson(res, 200, { models });
+        } catch (e) {
+          sendJson(res, 200, { models: [], error: e.message });
+        }
+        return;
+      }
+
       if (req.method === 'GET' && req.url === '/api/config') {
         const c = hooks.getConfig();
         sendJson(res, 200, {
@@ -161,7 +171,8 @@ const PAGE = `<!doctype html>
       <div class="meta" id="keyMeta"></div>
 
       <label>Modell</label>
-      <input id="model" placeholder="anthropic/claude-haiku-4.5">
+      <select id="model"></select>
+      <div class="meta" id="modelMeta"></div>
 
       <label>Persona (wie der Bot klingt)</label>
       <textarea id="persona"></textarea>
@@ -199,10 +210,34 @@ async function refresh() {
   } catch (e) { /* keep last state */ }
 }
 
+async function loadModels(selected) {
+  const sel = $('model');
+  let models = [], err = null;
+  try {
+    const r = await (await fetch('/api/models')).json();
+    models = r.models || [];
+    err = r.error || null;
+  } catch (e) { err = e.message; }
+  // Keep the saved model selectable even if it's not (or no longer) in the list.
+  if (selected && !models.some((m) => m.id === selected))
+    models.unshift({ id: selected, name: selected });
+  sel.innerHTML = '';
+  for (const m of models) {
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id;
+    sel.appendChild(o);
+  }
+  if (selected) sel.value = selected;
+  $('modelMeta').textContent = err
+    ? 'Modell-Liste nicht erreichbar — gespeichertes Modell wird genutzt.'
+    : models.length + ' Modelle von OpenRouter';
+}
+
 async function loadConfig() {
   const c = await (await fetch('/api/config')).json();
   $('targetNumber').value = c.targetNumber || '';
-  $('model').value = c.model || '';
+  await loadModels(c.model);
   $('persona').value = c.persona || '';
   $('oncePerDay').checked = !!c.oncePerDay;
   $('keyMeta').textContent = c.apiKeySet

@@ -21,10 +21,16 @@ const status = { connection: 'closed', qr: null, lastReply: null, lastError: nul
 let sock = null;
 
 // ---- Greeting detection ----------------------------------------------------
-const GREETING_RE = /\b(guten\s*morgen|good\s*morning|moin(?:\s*moin)?|morgen|g'?morgen)\b/i;
-
+// Strict: reply ONLY when the whole message is "Moin" or "Guten Morgen".
+// Emojis, punctuation and digits are stripped first, so "Moin 😊" or
+// "Guten Morgen!" still match, but "Guten Morgen, wie geht's?" does not.
 function isGoodMorning(text) {
-  return GREETING_RE.test(text || '');
+  const cleaned = (text || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\s]/gu, ' ') // keep letters + whitespace, drop emoji/punctuation/digits
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned === 'moin' || cleaned === 'guten morgen';
 }
 
 // ---- Once-per-day guard ----------------------------------------------------
@@ -79,6 +85,24 @@ async function generateReply(incomingText) {
   const data = await resp.json();
   const text = (data.choices?.[0]?.message?.content || '').trim();
   return text || 'Guten Morgen! ☀️';
+}
+
+// ---- OpenRouter model list (for the UI dropdown) ---------------------------
+let modelsCache = { at: 0, list: null };
+
+async function getModels() {
+  const now = Date.now();
+  if (modelsCache.list && now - modelsCache.at < 6 * 60 * 60 * 1000) {
+    return modelsCache.list;
+  }
+  const resp = await fetch('https://openrouter.ai/api/v1/models');
+  if (!resp.ok) throw new Error(`OpenRouter models ${resp.status}`);
+  const data = await resp.json();
+  const list = (data.data || [])
+    .map((m) => ({ id: m.id, name: m.name || m.id }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  modelsCache = { at: now, list };
+  return list;
 }
 
 // ---- WhatsApp connection ---------------------------------------------------
@@ -176,6 +200,7 @@ function reload() {
 startServer({
   getState: () => ({ ...status, configured: config.isConfigured(cfg) }),
   getConfig: () => cfg,
+  getModels,
   saveConfig: (patch) => {
     config.save(patch);
     reload();
