@@ -100,7 +100,13 @@ function ensureOneEmoji(text) {
   return text;
 }
 
-async function generateReply(incomingText) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function systemPrompt() {
+  return `${cfg.persona}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Beende mit genau einem einzigen, zur Antwort passenden Emoji. Nur die Antwort selbst, ohne Anfuehrungszeichen.`;
+}
+
+async function callModel(model, incomingText) {
   const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -108,23 +114,53 @@ async function generateReply(incomingText) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: cfg.model,
+      model,
       max_tokens: 150,
       messages: [
-        {
-          role: 'system',
-          content: `${cfg.persona}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Beende mit genau einem einzigen, zur Antwort passenden Emoji. Nur die Antwort selbst, ohne Anfuehrungszeichen.`,
-        },
+        { role: 'system', content: systemPrompt() },
         { role: 'user', content: `Die Nachricht lautet: "${incomingText}"` },
       ],
     }),
   });
-  if (!resp.ok) {
-    throw new Error(`OpenRouter ${resp.status}: ${await resp.text()}`);
-  }
+  if (!resp.ok) throw new Error(`OpenRouter ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
   const data = await resp.json();
-  const text = (data.choices?.[0]?.message?.content || '').trim();
-  return ensureOneEmoji(text || 'Guten Morgen!');
+  return (data.choices?.[0]?.message?.content || '').trim();
+}
+
+// Try one model up to `attempts` times with a short delay between tries.
+async function tryModel(model, incomingText, attempts) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const text = await callModel(model, incomingText);
+      if (text) return text;
+      lastErr = new Error('empty response');
+    } catch (err) {
+      lastErr = err;
+      console.warn(`Model ${model} try ${i + 1}/${attempts} failed: ${err.message}`);
+    }
+    if (i < attempts - 1) await sleep(2000);
+  }
+  throw lastErr;
+}
+
+// Primary model with retries, then fall back to the configured fallback model.
+async function generateReply(incomingText) {
+  const models = [cfg.model];
+  if (cfg.fallbackModel && cfg.fallbackModel !== cfg.model) models.push(cfg.fallbackModel);
+
+  let lastErr;
+  for (const model of models) {
+    try {
+      const text = await tryModel(model, incomingText, 3);
+      if (model !== cfg.model) console.log(`Primary model failed; used fallback ${model}.`);
+      return ensureOneEmoji(text);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`Model ${model} exhausted retries: ${err.message}`);
+    }
+  }
+  throw lastErr || new Error('reply generation failed');
 }
 
 // ---- OpenRouter model list (for the UI dropdown) ---------------------------

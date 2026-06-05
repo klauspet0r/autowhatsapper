@@ -70,6 +70,7 @@ function startServer(hooks) {
         sendJson(res, 200, {
           targetNumber: c.targetNumber,
           model: c.model,
+          fallbackModel: c.fallbackModel,
           persona: c.persona,
           oncePerDay: c.oncePerDay,
           apiKeySet: Boolean(c.openrouterApiKey),
@@ -83,6 +84,7 @@ function startServer(hooks) {
         if (typeof body.targetNumber === 'string')
           patch.targetNumber = body.targetNumber.replace(/\D/g, '');
         if (typeof body.model === 'string') patch.model = body.model.trim();
+        if (typeof body.fallbackModel === 'string') patch.fallbackModel = body.fallbackModel.trim();
         if (typeof body.persona === 'string') patch.persona = body.persona;
         if (typeof body.oncePerDay === 'boolean') patch.oncePerDay = body.oncePerDay;
         // Only overwrite the key when a non-empty value is supplied.
@@ -179,6 +181,9 @@ const PAGE = `<!doctype html>
       <select id="model"></select>
       <div class="meta" id="modelMeta"></div>
 
+      <label>Fallback-Modell (falls das Hauptmodell streikt)</label>
+      <select id="fallbackModel"></select>
+
       <label>Persona (wie der Bot klingt)</label>
       <textarea id="persona"></textarea>
 
@@ -218,27 +223,25 @@ async function refresh() {
 
 let ALL_MODELS = [];
 let SAVED_MODEL = '';
+let SAVED_FALLBACK = '';
 let MODELS_ERR = null;
 
-async function loadModels(selected) {
+async function loadModels(selected, fallback) {
   SAVED_MODEL = selected || '';
+  SAVED_FALLBACK = fallback || '';
   try {
     const r = await (await fetch('/api/models')).json();
     ALL_MODELS = r.models || [];
     MODELS_ERR = r.error || null;
   } catch (e) { ALL_MODELS = []; MODELS_ERR = e.message; }
   renderModels();
+  renderFallback();
 }
 
-function renderModels() {
-  const sel = $('model');
-  const onlyFree = $('freeOnly').checked;
-  const current = sel.value || SAVED_MODEL;
-  let list = onlyFree ? ALL_MODELS.filter((m) => m.free) : ALL_MODELS.slice();
-  // Keep the saved/selected model usable even if the filter would hide it.
-  if (current && !list.some((m) => m.id === current)) {
-    list.unshift(ALL_MODELS.find((m) => m.id === current) || { id: current, name: current });
-  }
+function fillSelect(sel, list, current) {
+  // Keep the saved/selected model usable even if a filter would hide it.
+  if (current && !list.some((m) => m.id === current))
+    list = [ALL_MODELS.find((m) => m.id === current) || { id: current, name: current }, ...list];
   sel.innerHTML = '';
   for (const m of list) {
     const o = document.createElement('option');
@@ -247,15 +250,28 @@ function renderModels() {
     sel.appendChild(o);
   }
   if (current) sel.value = current;
+}
+
+function renderModels() {
+  const onlyFree = $('freeOnly').checked;
+  const current = $('model').value || SAVED_MODEL;
+  const list = onlyFree ? ALL_MODELS.filter((m) => m.free) : ALL_MODELS.slice();
+  fillSelect($('model'), list, current);
   $('modelMeta').textContent = MODELS_ERR
     ? 'Modell-Liste nicht erreichbar — gespeichertes Modell wird genutzt.'
     : list.length + (onlyFree ? ' Gratis-Modelle' : ' Modelle') + ' von OpenRouter';
 }
 
+function renderFallback() {
+  // Fallback ignores the free filter — it should be a reliable model.
+  const current = $('fallbackModel').value || SAVED_FALLBACK;
+  fillSelect($('fallbackModel'), ALL_MODELS.slice(), current);
+}
+
 async function loadConfig() {
   const c = await (await fetch('/api/config')).json();
   $('targetNumber').value = c.targetNumber || '';
-  await loadModels(c.model);
+  await loadModels(c.model, c.fallbackModel);
   $('persona').value = c.persona || '';
   $('oncePerDay').checked = !!c.oncePerDay;
   $('keyMeta').textContent = c.apiKeySet
@@ -268,6 +284,7 @@ $('cfg').addEventListener('submit', async (e) => {
   const payload = {
     targetNumber: $('targetNumber').value,
     model: $('model').value,
+    fallbackModel: $('fallbackModel').value,
     persona: $('persona').value,
     oncePerDay: $('oncePerDay').checked,
   };

@@ -9,6 +9,7 @@ const DEFAULTS = {
   targetNumber: '',
   openrouterApiKey: '',
   model: 'anthropic/claude-haiku-4.5',
+  fallbackModel: 'anthropic/claude-haiku-4.5',
   persona:
     'Du bist mein freundlicher, leicht verschlafener Morgen-Buddy. ' +
     'Antworte herzlich und kurz auf Deutsch, mit maximal einem Emoji.',
