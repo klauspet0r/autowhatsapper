@@ -49,6 +49,7 @@ function startServer(hooks) {
           configured: s.configured,
           lastReply: s.lastReply,
           lastError: s.lastError,
+          pendingReply: s.pendingReply,
           qrImage,
         });
         return;
@@ -208,7 +209,8 @@ async function refresh() {
     if (s.qrImage) $('qrimg').src = s.qrImage;
     $('relink').style.display = s.connection === 'open' ? 'block' : 'none';
     let meta = '';
-    if (s.lastReply) meta = 'Letzte Antwort: ' + s.lastReply;
+    if (s.pendingReply) meta = '⏳ Antwort geplant gegen ' + s.pendingReply + ' Uhr';
+    if (s.lastReply) meta += (meta ? ' · ' : '') + 'Letzte Antwort: ' + s.lastReply;
     if (s.lastError) meta += (meta ? ' · ' : '') + 'Fehler: ' + s.lastError;
     $('meta').textContent = meta;
   } catch (e) { /* keep last state */ }

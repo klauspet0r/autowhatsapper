@@ -17,8 +17,13 @@ const STATE_FILE = path.join(__dirname, 'state.json');
 let cfg = config.load();
 
 // Live status surfaced to the web UI.
-const status = { connection: 'closed', qr: null, lastReply: null, lastError: null };
+const status = { connection: 'closed', qr: null, lastReply: null, lastError: null, pendingReply: null };
 let sock = null;
+let replyScheduled = false; // a delayed reply is currently pending
+
+// Wait a random 5-30 min after a greeting before replying, so it doesn't look automated.
+const MIN_DELAY_MS = 5 * 60 * 1000;
+const MAX_DELAY_MS = 30 * 60 * 1000;
 
 // ---- Greeting detection ----------------------------------------------------
 // Strict: reply ONLY when the whole message is "Moin", "Moin Moin" or
@@ -109,6 +114,32 @@ async function getModels() {
   return list;
 }
 
+// ---- Delayed reply scheduling ----------------------------------------------
+function scheduleReply(incomingText, targetJid) {
+  replyScheduled = true;
+  const delay = MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1));
+  const at = new Date(Date.now() + delay);
+  status.pendingReply = at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  console.log(`Greeting received. Replying around ${status.pendingReply} (in ${Math.round(delay / 60000)} min).`);
+
+  setTimeout(async () => {
+    try {
+      const reply = await generateReply(incomingText);
+      await sock.sendMessage(targetJid, { text: reply });
+      markRepliedToday();
+      status.lastReply = reply;
+      status.lastError = null;
+      console.log(`Replied: ${reply}`);
+    } catch (err) {
+      status.lastError = err.message;
+      console.error('Failed to reply:', err.message);
+    } finally {
+      replyScheduled = false;
+      status.pendingReply = null;
+    }
+  }, delay);
+}
+
 // ---- WhatsApp connection ---------------------------------------------------
 async function startSock() {
   if (sock) return;
@@ -160,22 +191,13 @@ async function startSock() {
         msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
       if (!isGoodMorning(text)) continue;
+      if (replyScheduled) continue; // a reply is already pending
       if (alreadyRepliedToday()) {
         console.log('Already replied today, skipping.');
         continue;
       }
 
-      try {
-        const reply = await generateReply(text);
-        await sock.sendMessage(targetJid, { text: reply });
-        markRepliedToday();
-        status.lastReply = reply;
-        status.lastError = null;
-        console.log(`Replied: ${reply}`);
-      } catch (err) {
-        status.lastError = err.message;
-        console.error('Failed to reply:', err.message);
-      }
+      scheduleReply(text, targetJid);
     }
   });
 }
