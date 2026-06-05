@@ -164,6 +164,9 @@ async function generateReply(incomingText) {
 }
 
 // ---- OpenRouter model list (for the UI dropdown) ---------------------------
+// Rough token counts for one good-morning reply, used to estimate per-reply cost.
+const EST_INPUT_TOKENS = 200;
+const EST_OUTPUT_TOKENS = 80;
 let modelsCache = { at: 0, list: null };
 
 async function getModels() {
@@ -177,8 +180,13 @@ async function getModels() {
   const list = (data.data || [])
     .map((m) => {
       const p = m.pricing || {};
-      const free = parseFloat(p.prompt || 0) === 0 && parseFloat(p.completion || 0) === 0;
-      return { id: m.id, name: m.name || m.id, free };
+      const prompt = parseFloat(p.prompt || 0);
+      const completion = parseFloat(p.completion || 0);
+      const request = parseFloat(p.request || 0);
+      const free = prompt === 0 && completion === 0 && request === 0;
+      // Estimated USD cost of one short reply.
+      const costPerReply = EST_INPUT_TOKENS * prompt + EST_OUTPUT_TOKENS * completion + request;
+      return { id: m.id, name: m.name || m.id, free, costPerReply };
     })
     .sort((a, b) => a.id.localeCompare(b.id));
   modelsCache = { at: now, list };

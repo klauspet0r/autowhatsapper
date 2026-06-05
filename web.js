@@ -238,6 +238,12 @@ async function loadModels(selected, fallback) {
   renderFallback();
 }
 
+function formatCost(usd) {
+  const cents = usd * 100;
+  const s = cents >= 1 ? cents.toFixed(2) : cents.toPrecision(2);
+  return '≈ ' + s.replace('.', ',') + ' ¢/Antwort';
+}
+
 function fillSelect(sel, list, current) {
   // Keep the saved/selected model usable even if a filter would hide it.
   if (current && !list.some((m) => m.id === current))
@@ -246,7 +252,9 @@ function fillSelect(sel, list, current) {
   for (const m of list) {
     const o = document.createElement('option');
     o.value = m.id;
-    o.textContent = (m.free ? '🆓 ' : '') + (m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id);
+    let label = (m.free ? '🆓 ' : '') + (m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id);
+    if (!m.free && m.costPerReply) label += '  (' + formatCost(m.costPerReply) + ')';
+    o.textContent = label;
     sel.appendChild(o);
   }
   if (current) sel.value = current;
