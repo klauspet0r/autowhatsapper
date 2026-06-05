@@ -79,6 +79,27 @@ function clearPending() {
 }
 
 // ---- AI reply --------------------------------------------------------------
+// Emoji cluster matcher (base pictograph + optional VS16 / ZWJ sequences / skin tones).
+const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}])*/gu;
+const FALLBACK_EMOJIS = ['☀️', '🌞', '😊', '👋', '🌅'];
+
+// Guarantee the reply carries exactly one fitting emoji.
+function ensureOneEmoji(text) {
+  const matches = text.match(EMOJI_RE) || [];
+  if (matches.length === 0) {
+    const e = FALLBACK_EMOJIS[Math.floor(Math.random() * FALLBACK_EMOJIS.length)];
+    return `${text} ${e}`.trim();
+  }
+  if (matches.length > 1) {
+    let kept = false;
+    return text
+      .replace(EMOJI_RE, (m) => (kept ? '' : ((kept = true), m)))
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+  return text;
+}
+
 async function generateReply(incomingText) {
   const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -92,7 +113,7 @@ async function generateReply(incomingText) {
       messages: [
         {
           role: 'system',
-          content: `${cfg.persona}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Nur die Antwort selbst, ohne Anfuehrungszeichen.`,
+          content: `${cfg.persona}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Beende mit genau einem einzigen, zur Antwort passenden Emoji. Nur die Antwort selbst, ohne Anfuehrungszeichen.`,
         },
         { role: 'user', content: `Die Nachricht lautet: "${incomingText}"` },
       ],
@@ -103,7 +124,7 @@ async function generateReply(incomingText) {
   }
   const data = await resp.json();
   const text = (data.choices?.[0]?.message?.content || '').trim();
-  return text || 'Guten Morgen! ☀️';
+  return ensureOneEmoji(text || 'Guten Morgen!');
 }
 
 // ---- OpenRouter model list (for the UI dropdown) ---------------------------
