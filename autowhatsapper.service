@@ -1,0 +1,21 @@
+[Unit]
+Description=autowhatsapper - WhatsApp good-morning auto-reply
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User and paths to match your Pi (see DEPLOY.md).
+User=pi
+WorkingDirectory=/home/pi/autowhatsapper
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=10
+# Settings live in config.json (written by the web UI); no env config needed.
+# UI binds to 127.0.0.1:8080 by default. To override (e.g. for LAN access or a
+# port clash), uncomment and pair with a LAN-scoped firewall rule (see DEPLOY.md):
+#Environment=WEB_HOST=0.0.0.0
+#Environment=WEB_PORT=8765
+
+[Install]
+WantedBy=multi-user.target

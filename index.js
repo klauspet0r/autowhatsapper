@@ -1,10 +1,6 @@
-require('dotenv').config();
-
 const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const Anthropic = require('@anthropic-ai/sdk');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -12,28 +8,19 @@ const {
   fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 
-// ---- Config ----------------------------------------------------------------
-const TARGET_NUMBER = (process.env.TARGET_NUMBER || '').replace(/\D/g, '');
-const TARGET_JID = `${TARGET_NUMBER}@s.whatsapp.net`;
-const ONCE_PER_DAY = (process.env.ONCE_PER_DAY || 'true') === 'true';
-const PERSONA =
-  process.env.REPLY_PERSONA ||
-  'Du bist ein freundlicher Morgen-Buddy. Antworte kurz und herzlich auf Deutsch.';
+const config = require('./config');
+const { startServer } = require('./web');
+
+const AUTH_DIR = path.join(__dirname, 'auth');
 const STATE_FILE = path.join(__dirname, 'state.json');
 
-if (!TARGET_NUMBER) {
-  console.error('TARGET_NUMBER is not set. Copy .env.example to .env and fill it in.');
-  process.exit(1);
-}
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('ANTHROPIC_API_KEY is not set. Copy .env.example to .env and fill it in.');
-  process.exit(1);
-}
+let cfg = config.load();
 
-const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+// Live status surfaced to the web UI.
+const status = { connection: 'closed', qr: null, lastReply: null, lastError: null };
+let sock = null;
 
 // ---- Greeting detection ----------------------------------------------------
-// Matches common German + English good-morning phrasings.
 const GREETING_RE = /\b(guten\s*morgen|good\s*morning|moin(?:\s*moin)?|morgen|g'?morgen)\b/i;
 
 function isGoodMorning(text) {
@@ -54,12 +41,11 @@ function saveState(state) {
 }
 
 function todayKey() {
-  // Local-date string, e.g. "2026-05-30"
-  return new Date().toLocaleDateString('sv-SE'); // sv-SE gives ISO-like YYYY-MM-DD
+  return new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
 }
 
 function alreadyRepliedToday() {
-  if (!ONCE_PER_DAY) return false;
+  if (!cfg.oncePerDay) return false;
   return loadState().lastReplyDate === todayKey();
 }
 
@@ -69,30 +55,40 @@ function markRepliedToday() {
 
 // ---- AI reply --------------------------------------------------------------
 async function generateReply(incomingText) {
-  const resp = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 150,
-    system: `${PERSONA}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Nur die Antwort selbst, ohne Anfuehrungszeichen.`,
-    messages: [{ role: 'user', content: `Die Nachricht lautet: "${incomingText}"` }],
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.openrouterApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: cfg.model,
+      max_tokens: 150,
+      messages: [
+        {
+          role: 'system',
+          content: `${cfg.persona}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Nur die Antwort selbst, ohne Anfuehrungszeichen.`,
+        },
+        { role: 'user', content: `Die Nachricht lautet: "${incomingText}"` },
+      ],
+    }),
   });
-  const text = resp.content
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim();
+  if (!resp.ok) {
+    throw new Error(`OpenRouter ${resp.status}: ${await resp.text()}`);
+  }
+  const data = await resp.json();
+  const text = (data.choices?.[0]?.message?.content || '').trim();
   return text || 'Guten Morgen! ☀️';
 }
 
 // ---- WhatsApp connection ---------------------------------------------------
-async function start() {
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'auth'));
+async function startSock() {
+  if (sock) return;
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    logger: pino({ level: 'silent' }),
-  });
+  sock = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }) });
+  status.connection = 'connecting';
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -100,33 +96,40 @@ async function start() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log('\nScan this QR code in WhatsApp > Linked devices:\n');
-      qrcode.generate(qr, { small: true });
+      status.qr = qr;
+      status.connection = 'qr';
     }
 
     if (connection === 'open') {
-      console.log(`Connected. Watching for good-morning messages from ${TARGET_NUMBER}.`);
+      status.connection = 'open';
+      status.qr = null;
+      console.log(`Connected. Watching for good-morning messages from ${cfg.targetNumber}.`);
     }
 
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
+      sock = null;
+      status.connection = 'closed';
       console.log(`Connection closed (code ${code}).${loggedOut ? ' Logged out.' : ' Reconnecting...'}`);
-      if (!loggedOut) start();
+      if (loggedOut) {
+        status.qr = null;
+      } else {
+        startSock();
+      }
     }
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
+    const targetJid = `${cfg.targetNumber}@s.whatsapp.net`;
 
     for (const msg of messages) {
       if (msg.key.fromMe) continue;
-      if (msg.key.remoteJid !== TARGET_JID) continue;
+      if (msg.key.remoteJid !== targetJid) continue;
 
       const text =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        '';
+        msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
       if (!isGoodMorning(text)) continue;
       if (alreadyRepliedToday()) {
@@ -136,14 +139,52 @@ async function start() {
 
       try {
         const reply = await generateReply(text);
-        await sock.sendMessage(TARGET_JID, { text: reply });
+        await sock.sendMessage(targetJid, { text: reply });
         markRepliedToday();
+        status.lastReply = reply;
+        status.lastError = null;
         console.log(`Replied: ${reply}`);
       } catch (err) {
+        status.lastError = err.message;
         console.error('Failed to reply:', err.message);
       }
     }
   });
 }
 
-start();
+// Log out of WhatsApp and clear the saved session so a fresh QR is shown.
+async function relink() {
+  try {
+    if (sock) await sock.logout();
+  } catch {
+    /* ignore — we clear the session regardless */
+  }
+  sock = null;
+  status.connection = 'closed';
+  status.qr = null;
+  fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  startSock();
+}
+
+// Re-read config after the web UI saves; connect if we just became configured.
+function reload() {
+  cfg = config.load();
+  if (config.isConfigured(cfg) && !sock) startSock();
+}
+
+// ---- Wire up ---------------------------------------------------------------
+startServer({
+  getState: () => ({ ...status, configured: config.isConfigured(cfg) }),
+  getConfig: () => cfg,
+  saveConfig: (patch) => {
+    config.save(patch);
+    reload();
+  },
+  relink,
+});
+
+if (config.isConfigured(cfg)) {
+  startSock();
+} else {
+  console.log('Not configured yet. Open the web UI to set the API key and target number.');
+}
