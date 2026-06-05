@@ -21,16 +21,16 @@ const status = { connection: 'closed', qr: null, lastReply: null, lastError: nul
 let sock = null;
 
 // ---- Greeting detection ----------------------------------------------------
-// Strict: reply ONLY when the whole message is "Moin" or "Guten Morgen".
-// Emojis, punctuation and digits are stripped first, so "Moin 😊" or
-// "Guten Morgen!" still match, but "Guten Morgen, wie geht's?" does not.
+// Strict: reply ONLY when the whole message is "Moin", "Moin Moin" or
+// "Guten Morgen". Emojis, punctuation and digits are stripped first, so
+// "Moin 😊" or "Guten Morgen!" still match, but "Guten Morgen, wie geht's?" does not.
 function isGoodMorning(text) {
   const cleaned = (text || '')
     .toLowerCase()
     .replace(/[^\p{L}\s]/gu, ' ') // keep letters + whitespace, drop emoji/punctuation/digits
     .replace(/\s+/g, ' ')
     .trim();
-  return cleaned === 'moin' || cleaned === 'guten morgen';
+  return cleaned === 'moin' || cleaned === 'moin moin' || cleaned === 'guten morgen';
 }
 
 // ---- Once-per-day guard ----------------------------------------------------
