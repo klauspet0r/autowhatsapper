@@ -61,7 +61,21 @@ function alreadyRepliedToday() {
 }
 
 function markRepliedToday() {
-  saveState({ lastReplyDate: todayKey() });
+  const state = loadState();
+  state.lastReplyDate = todayKey();
+  saveState(state);
+}
+
+function setPending(at, text) {
+  const state = loadState();
+  state.pending = { at, text };
+  saveState(state);
+}
+
+function clearPending() {
+  const state = loadState();
+  delete state.pending;
+  saveState(state);
 }
 
 // ---- AI reply --------------------------------------------------------------
@@ -115,12 +129,13 @@ async function getModels() {
 }
 
 // ---- Delayed reply scheduling ----------------------------------------------
-function scheduleReply(incomingText, targetJid) {
+// The planned send time is persisted to state.json, so a restart during the
+// wait resumes the reply (see resumePending) instead of dropping it.
+function armReply(at, incomingText, targetJid) {
   replyScheduled = true;
-  const delay = MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1));
-  const at = new Date(Date.now() + delay);
-  status.pendingReply = at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  console.log(`Greeting received. Replying around ${status.pendingReply} (in ${Math.round(delay / 60000)} min).`);
+  status.pendingReply = new Date(at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const remaining = Math.max(0, at - Date.now());
+  console.log(`Reply armed for ${status.pendingReply} (in ${Math.round(remaining / 60000)} min).`);
 
   setTimeout(async () => {
     try {
@@ -134,10 +149,31 @@ function scheduleReply(incomingText, targetJid) {
       status.lastError = err.message;
       console.error('Failed to reply:', err.message);
     } finally {
+      clearPending();
       replyScheduled = false;
       status.pendingReply = null;
     }
-  }, delay);
+  }, remaining);
+}
+
+function scheduleReply(incomingText, targetJid) {
+  const delay = MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1));
+  const at = Date.now() + delay;
+  setPending(at, incomingText);
+  armReply(at, incomingText, targetJid);
+}
+
+// On (re)connect, resume a reply that was scheduled before a restart.
+function resumePending() {
+  if (replyScheduled) return;
+  const { pending } = loadState();
+  if (!pending || !pending.at) return;
+  if (Date.now() - pending.at > 60 * 60 * 1000) {
+    console.log('Discarding stale pending reply (>1h overdue).');
+    clearPending();
+    return;
+  }
+  armReply(pending.at, pending.text || '', `${cfg.targetNumber}@s.whatsapp.net`);
 }
 
 // ---- WhatsApp connection ---------------------------------------------------
@@ -163,6 +199,7 @@ async function startSock() {
       status.connection = 'open';
       status.qr = null;
       console.log(`Connected. Watching for good-morning messages from ${cfg.targetNumber}.`);
+      resumePending();
     }
 
     if (connection === 'close') {
