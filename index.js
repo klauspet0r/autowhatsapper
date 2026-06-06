@@ -287,7 +287,8 @@ async function startSock() {
 
     for (const msg of messages) {
       if (msg.key.fromMe) continue;
-      if (msg.key.remoteJid !== targetJid) continue;
+      // Newer WhatsApp addresses chats by @lid; senderPn carries the real phone-number JID.
+      if (msg.key.remoteJid !== targetJid && msg.key.senderPn !== targetJid) continue;
 
       const text =
         msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
