@@ -62,6 +62,9 @@ npm start
 
 Then open **http://127.0.0.1:8080** and scan the QR with WhatsApp.
 
+Prefer a guided first run? `npm run setup` walks you through the target number,
+API key, and persona on the command line — then just `npm start` and scan the QR.
+
 ## Quick start (local)
 
 Requires **Node.js 18+** (for the built-in `fetch`).
