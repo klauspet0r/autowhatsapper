@@ -75,6 +75,8 @@ function startServer(hooks) {
           oncePerDay: c.oncePerDay,
           triggers: c.triggers,
           matchMode: c.matchMode,
+          replyMode: c.replyMode,
+          staticReplies: c.staticReplies,
           apiKeySet: Boolean(c.openrouterApiKey),
         });
         return;
@@ -96,6 +98,13 @@ function startServer(hooks) {
             .filter(Boolean);
         if (body.matchMode === 'exact' || body.matchMode === 'contains')
           patch.matchMode = body.matchMode;
+        if (body.replyMode === 'ai' || body.replyMode === 'static')
+          patch.replyMode = body.replyMode;
+        if (Array.isArray(body.staticReplies))
+          patch.staticReplies = body.staticReplies
+            .filter((s) => typeof s === 'string')
+            .map((s) => s.trim())
+            .filter(Boolean);
         // Only overwrite the key when a non-empty value is supplied.
         if (typeof body.openrouterApiKey === 'string' && body.openrouterApiKey.trim())
           patch.openrouterApiKey = body.openrouterApiKey.trim();
@@ -177,6 +186,15 @@ const PAGE = `<!doctype html>
     <form id="cfg">
       <label>Zielnummer (Landesvorwahl, ohne +)</label>
       <input id="targetNumber" inputmode="numeric" placeholder="491701234567">
+
+      <label>Antwort-Modus</label>
+      <select id="replyMode">
+        <option value="ai">KI (OpenRouter)</option>
+        <option value="static">Feste Texte</option>
+      </select>
+
+      <label>Feste Antworten (eine pro Zeile)</label>
+      <textarea id="staticReplies"></textarea>
 
       <label>OpenRouter API Key</label>
       <input id="openrouterApiKey" type="password" autocomplete="off" placeholder="sk-or-…">
@@ -301,6 +319,8 @@ async function loadConfig() {
   $('persona').value = c.persona || '';
   $('triggers').value = (c.triggers || []).join('\\n');
   $('matchMode').value = c.matchMode || 'exact';
+  $('replyMode').value = c.replyMode || 'ai';
+  $('staticReplies').value = (c.staticReplies || []).join('\\n');
   $('oncePerDay').checked = !!c.oncePerDay;
   $('keyMeta').textContent = c.apiKeySet
     ? 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.'
@@ -316,6 +336,8 @@ $('cfg').addEventListener('submit', async (e) => {
     persona: $('persona').value,
     triggers: $('triggers').value.split('\\n').map((t) => t.trim()).filter(Boolean),
     matchMode: $('matchMode').value,
+    replyMode: $('replyMode').value,
+    staticReplies: $('staticReplies').value.split('\\n').map((s) => s.trim()).filter(Boolean),
     oncePerDay: $('oncePerDay').checked,
   };
   const key = $('openrouterApiKey').value.trim();

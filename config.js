@@ -16,6 +16,8 @@ const DEFAULTS = {
   oncePerDay: true,
   triggers: ['moin', 'moin moin', 'guten morgen'],
   matchMode: 'exact',
+  replyMode: 'ai',
+  staticReplies: [],
 };
 
 function load() {
@@ -34,7 +36,9 @@ function save(patch) {
 }
 
 function isConfigured(cfg) {
-  return Boolean(cfg.targetNumber && cfg.openrouterApiKey);
+  if (!cfg.targetNumber) return false;
+  if (cfg.replyMode === 'static') return (cfg.staticReplies || []).some((s) => s && s.trim());
+  return Boolean(cfg.openrouterApiKey);
 }
 
 module.exports = { load, save, isConfigured, DEFAULTS, CONFIG_FILE };

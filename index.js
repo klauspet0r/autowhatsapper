@@ -172,6 +172,17 @@ async function generateReply(incomingText) {
   throw lastErr || new Error('reply generation failed');
 }
 
+// Dispatch on the reply mode: in 'static' mode pick a random predefined text
+// (returned verbatim, no emoji enforcement), otherwise use the AI path.
+function produceReply(incomingText) {
+  if (cfg.replyMode === 'static') {
+    const replies = (cfg.staticReplies || []).filter((s) => s && s.trim());
+    if (replies.length === 0) throw new Error('no static replies configured');
+    return replies[Math.floor(Math.random() * replies.length)];
+  }
+  return generateReply(incomingText);
+}
+
 // ---- OpenRouter model list (for the UI dropdown) ---------------------------
 // Rough token counts for one good-morning reply, used to estimate per-reply cost.
 const EST_INPUT_TOKENS = 200;
@@ -213,7 +224,7 @@ function armReply(at, incomingText, targetJid) {
 
   setTimeout(async () => {
     try {
-      const reply = await generateReply(incomingText);
+      const reply = await produceReply(incomingText);
       await sock.sendMessage(targetJid, { text: reply });
       markRepliedToday();
       status.lastReply = reply;
