@@ -19,6 +19,12 @@ through a small built-in web page.
 > bot the practical risk is low, but not zero. Don't use it for spam or mass
 > messaging — that's both against the ToS and not what this project is for.
 
+## Documentation
+
+- [⚡ 60-second quickstart](#-60-second-quickstart) — clone, install, scan, done
+- [Configuration](#configuration) — settings, AI vs. static mode, env vars
+- [Raspberry Pi guide (DEPLOY.md)](DEPLOY.md) — run it 24/7 as a `systemd` service
+
 ## Features
 
 - **Daily-varied replies** — each answer is generated via [OpenRouter](https://openrouter.ai/)
@@ -102,6 +108,9 @@ All settings are edited in the web UI (no config files to hand-edit):
 
 The UI's model dropdown lists every OpenRouter model with an estimated per-reply
 cost, and can filter to free models only.
+
+**AI is optional:** switch the reply mode to *static* to answer from your own
+predefined texts instead — no OpenRouter key needed.
 
 ### Environment variables
 
