@@ -247,7 +247,9 @@ async function startSock() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }) });
+  // markOnlineOnConnect: false keeps the phone receiving push notifications;
+  // otherwise the always-on linked device looks "online" and WhatsApp suppresses them.
+  sock = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }), markOnlineOnConnect: false });
   status.connection = 'connecting';
 
   sock.ev.on('creds.update', saveCreds);

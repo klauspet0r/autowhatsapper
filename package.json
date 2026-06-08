@@ -1,9 +1,30 @@
 {
   "name": "autowhatsapper",
   "version": "1.0.0",
-  "description": "Auto-replies to a specific contact's good-morning messages on WhatsApp",
+  "description": "Auto-replies to a specific contact's good-morning messages on WhatsApp, with a fresh AI-generated reply each day",
   "main": "index.js",
   "type": "commonjs",
+  "author": "klauspet0r",
+  "license": "MIT",
+  "homepage": "https://github.com/klauspet0r/autowhatsapper#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klauspet0r/autowhatsapper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/klauspet0r/autowhatsapper/issues"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "bot",
+    "auto-reply",
+    "openrouter",
+    "raspberry-pi"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node index.js"
   },
