@@ -18,6 +18,7 @@ const DEFAULTS = {
   matchMode: 'exact',
   replyMode: 'ai',
   staticReplies: [],
+  lang: 'de',
 };
 
 function load() {
