@@ -73,6 +73,11 @@ function startServer(hooks) {
           fallbackModel: c.fallbackModel,
           persona: c.persona,
           oncePerDay: c.oncePerDay,
+          triggers: c.triggers,
+          matchMode: c.matchMode,
+          replyMode: c.replyMode,
+          staticReplies: c.staticReplies,
+          lang: c.lang,
           apiKeySet: Boolean(c.openrouterApiKey),
         });
         return;
@@ -87,6 +92,21 @@ function startServer(hooks) {
         if (typeof body.fallbackModel === 'string') patch.fallbackModel = body.fallbackModel.trim();
         if (typeof body.persona === 'string') patch.persona = body.persona;
         if (typeof body.oncePerDay === 'boolean') patch.oncePerDay = body.oncePerDay;
+        if (Array.isArray(body.triggers))
+          patch.triggers = body.triggers
+            .filter((t) => typeof t === 'string')
+            .map((t) => t.trim())
+            .filter(Boolean);
+        if (body.matchMode === 'exact' || body.matchMode === 'contains')
+          patch.matchMode = body.matchMode;
+        if (body.replyMode === 'ai' || body.replyMode === 'static')
+          patch.replyMode = body.replyMode;
+        if (body.lang === 'de' || body.lang === 'en') patch.lang = body.lang;
+        if (Array.isArray(body.staticReplies))
+          patch.staticReplies = body.staticReplies
+            .filter((s) => typeof s === 'string')
+            .map((s) => s.trim())
+            .filter(Boolean);
         // Only overwrite the key when a non-empty value is supplied.
         if (typeof body.openrouterApiKey === 'string' && body.openrouterApiKey.trim())
           patch.openrouterApiKey = body.openrouterApiKey.trim();
@@ -147,52 +167,90 @@ const PAGE = `<!doctype html>
   button.ghost:hover { background: #313845; }
   .saved { color: #22c55e; font-size: 13px; text-align: center; margin-top: 10px; min-height: 18px; }
   .meta { font-size: 12px; color: #8b929c; margin-top: 6px; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .lang { font-size: 12px; color: #8b929c; }
+  .lang button { width: auto; margin: 0; padding: 2px 7px; background: transparent; color: #8b929c;
+    font: inherit; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; }
+  .lang button:hover { background: #262b34; color: #e6e8eb; }
+  .lang button.active { color: #e6e8eb; background: #262b34; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>autowhatsapper</h1>
-  <div class="sub">Guten-Morgen Auto-Antwort · Konfiguration</div>
+  <div class="head">
+    <div>
+      <h1>autowhatsapper</h1>
+      <div class="sub" data-i18n="subtitle"></div>
+    </div>
+    <div class="lang">
+      <button type="button" id="langDe" data-lang="de">DE</button>
+      <span>|</span>
+      <button type="button" id="langEn" data-lang="en">EN</button>
+    </div>
+  </div>
 
   <div class="card">
-    <div class="status"><span id="dot" class="dot"></span><span id="statusText">Lade…</span></div>
+    <div class="status"><span id="dot" class="dot"></span><span id="statusText">…</span></div>
     <div id="qrbox" class="qrbox" style="display:none">
       <img id="qrimg" alt="WhatsApp QR">
-      <div class="hint">WhatsApp → Verknüpfte Geräte → Gerät verknüpfen → QR scannen</div>
+      <div class="hint" data-i18n="qrHint"></div>
     </div>
     <div id="meta" class="meta"></div>
-    <button id="relink" class="ghost" style="display:none">Neu verknüpfen (abmelden)</button>
+    <button id="relink" class="ghost" style="display:none" data-i18n="relink"></button>
   </div>
 
   <div class="card">
     <form id="cfg">
-      <label>Zielnummer (Landesvorwahl, ohne +)</label>
+      <label data-i18n="targetNumber"></label>
       <input id="targetNumber" inputmode="numeric" placeholder="491701234567">
 
-      <label>OpenRouter API Key</label>
-      <input id="openrouterApiKey" type="password" autocomplete="off" placeholder="sk-or-…">
-      <div class="meta" id="keyMeta"></div>
+      <label data-i18n="replyMode"></label>
+      <select id="replyMode">
+        <option value="ai" data-i18n="modeAi"></option>
+        <option value="static" data-i18n="modeStatic"></option>
+      </select>
+      <div class="meta" id="modeMeta"></div>
 
-      <label>Modell</label>
-      <div class="row" style="margin-top:0">
-        <input id="freeOnly" type="checkbox">
-        <label style="margin:0">Nur Gratis-Modelle anzeigen</label>
+      <div id="staticFields">
+        <label data-i18n="staticReplies"></label>
+        <textarea id="staticReplies"></textarea>
       </div>
-      <select id="model"></select>
-      <div class="meta" id="modelMeta"></div>
 
-      <label>Fallback-Modell (falls das Hauptmodell streikt)</label>
-      <select id="fallbackModel"></select>
+      <div id="aiFields">
+        <label data-i18n="apiKey"></label>
+        <input id="openrouterApiKey" type="password" autocomplete="off" placeholder="sk-or-…">
+        <div class="meta" id="keyMeta"></div>
 
-      <label>Persona (wie der Bot klingt)</label>
-      <textarea id="persona"></textarea>
+        <label data-i18n="model"></label>
+        <div class="row" style="margin-top:0">
+          <input id="freeOnly" type="checkbox">
+          <label style="margin:0" data-i18n="freeOnly"></label>
+        </div>
+        <select id="model"></select>
+        <div class="meta" id="modelMeta"></div>
+
+        <label data-i18n="fallbackModel"></label>
+        <select id="fallbackModel"></select>
+
+        <label data-i18n="persona"></label>
+        <textarea id="persona"></textarea>
+      </div>
+
+      <label data-i18n="triggers"></label>
+      <textarea id="triggers"></textarea>
+
+      <label data-i18n="matchMode"></label>
+      <select id="matchMode">
+        <option value="exact" data-i18n="matchExact"></option>
+        <option value="contains" data-i18n="matchContains"></option>
+      </select>
 
       <div class="row">
         <input id="oncePerDay" type="checkbox">
-        <label style="margin:0">Nur auf den ersten Gruß pro Tag antworten</label>
+        <label style="margin:0" data-i18n="oncePerDay"></label>
       </div>
 
-      <button type="submit">Speichern</button>
+      <button type="submit" data-i18n="save"></button>
       <div class="saved" id="saved"></div>
     </form>
   </div>
@@ -200,23 +258,128 @@ const PAGE = `<!doctype html>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const labels = { open:'Verbunden', qr:'QR scannen zum Verknüpfen', connecting:'Verbinde…',
-  closed:'Getrennt' };
+
+const I18N = {
+  de: {
+    subtitle: 'WhatsApp Auto-Antwort · Konfiguration',
+    loading: 'Lade…',
+    statusOpen: 'Verbunden',
+    statusQr: 'QR scannen zum Verknüpfen',
+    statusConnecting: 'Verbinde…',
+    statusClosed: 'Getrennt',
+    notConfigured: 'Nicht konfiguriert — bitte Key & Nummer setzen',
+    qrHint: 'WhatsApp → Verknüpfte Geräte → Gerät verknüpfen → QR scannen',
+    relink: 'Neu verknüpfen (abmelden)',
+    relinkConfirm: 'WhatsApp abmelden und neuen QR-Code anzeigen?',
+    targetNumber: 'Zielnummer (Landesvorwahl, ohne +)',
+    replyMode: 'Antwort-Modus',
+    modeAi: 'KI (OpenRouter)',
+    modeStatic: 'Feste Texte',
+    modeActiveAi: 'Aktiv: KI',
+    modeActiveStatic: 'Aktiv: Feste Texte',
+    staticReplies: 'Feste Antworten (eine pro Zeile)',
+    apiKey: 'OpenRouter API Key',
+    keyNeeded: 'OpenRouter-Key nötig für den KI-Modus.',
+    keySaved: 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.',
+    keyNone: 'Noch kein Key gespeichert.',
+    model: 'Modell',
+    freeOnly: 'Nur Gratis-Modelle anzeigen',
+    modelsErr: 'Modell-Liste nicht erreichbar — gespeichertes Modell wird genutzt.',
+    modelsFree: ' Gratis-Modelle von OpenRouter',
+    modelsAll: ' Modelle von OpenRouter',
+    costSuffix: ' ¢/Antwort',
+    fallbackModel: 'Fallback-Modell (falls das Hauptmodell streikt)',
+    persona: 'Persona (wie der Bot klingt)',
+    triggers: 'Trigger (ein Wort/Satz pro Zeile)',
+    matchMode: 'Trefferart',
+    matchExact: 'Exakt',
+    matchContains: 'Enthält',
+    oncePerDay: 'Nur auf die erste passende Nachricht pro Tag antworten',
+    save: 'Speichern',
+    saved: 'Gespeichert ✓',
+    saveError: 'Fehler beim Speichern',
+    metaPending: '⏳ Antwort geplant gegen ',
+    metaPendingSuffix: ' Uhr',
+    metaLastReply: 'Letzte Antwort: ',
+    metaError: 'Fehler: ',
+  },
+  en: {
+    subtitle: 'WhatsApp Auto Reply · Configuration',
+    loading: 'Loading…',
+    statusOpen: 'Connected',
+    statusQr: 'Scan QR to link',
+    statusConnecting: 'Connecting…',
+    statusClosed: 'Disconnected',
+    notConfigured: 'Not configured — please set key & number',
+    qrHint: 'WhatsApp → Linked devices → Link a device → Scan QR',
+    relink: 'Re-link (log out)',
+    relinkConfirm: 'Log out of WhatsApp and show a new QR code?',
+    targetNumber: 'Target number (country code, without +)',
+    replyMode: 'Reply mode',
+    modeAi: 'AI (OpenRouter)',
+    modeStatic: 'Fixed texts',
+    modeActiveAi: 'Active: AI',
+    modeActiveStatic: 'Active: Fixed texts',
+    staticReplies: 'Fixed replies (one per line)',
+    apiKey: 'OpenRouter API key',
+    keyNeeded: 'OpenRouter key required for AI mode.',
+    keySaved: 'A key is saved. Leave the field empty to keep it.',
+    keyNone: 'No key saved yet.',
+    model: 'Model',
+    freeOnly: 'Show free models only',
+    modelsErr: 'Model list unavailable — the saved model will be used.',
+    modelsFree: ' free models from OpenRouter',
+    modelsAll: ' models from OpenRouter',
+    costSuffix: ' ¢/reply',
+    fallbackModel: 'Fallback model (if the main model fails)',
+    persona: 'Persona (how the bot sounds)',
+    triggers: 'Triggers (one word/phrase per line)',
+    matchMode: 'Match type',
+    matchExact: 'Exact',
+    matchContains: 'Contains',
+    oncePerDay: 'Only reply to the first matching message per day',
+    save: 'Save',
+    saved: 'Saved ✓',
+    saveError: 'Save failed',
+    metaPending: '⏳ Reply scheduled around ',
+    metaPendingSuffix: '',
+    metaLastReply: 'Last reply: ',
+    metaError: 'Error: ',
+  },
+};
+
+let LANG = 'de';
+const t = (key) => (I18N[LANG] && I18N[LANG][key] != null ? I18N[LANG][key] : key);
+
+function applyLang(lang) {
+  LANG = I18N[lang] ? lang : 'de';
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  $('langDe').classList.toggle('active', LANG === 'de');
+  $('langEn').classList.toggle('active', LANG === 'en');
+  // Re-render JS-driven strings in the new language.
+  applyMode();
+  renderModels();
+  refresh();
+}
 
 async function refresh() {
   try {
     const s = await (await fetch('/api/state')).json();
     $('dot').className = 'dot ' + s.connection;
-    let txt = labels[s.connection] || s.connection;
-    if (!s.configured) txt = 'Nicht konfiguriert — bitte Key & Nummer setzen';
+    const statusKeys = { open:'statusOpen', qr:'statusQr', connecting:'statusConnecting', closed:'statusClosed' };
+    let txt = statusKeys[s.connection] ? t(statusKeys[s.connection]) : s.connection;
+    if (!s.configured) txt = t('notConfigured');
     $('statusText').textContent = txt;
     $('qrbox').style.display = s.qrImage ? 'block' : 'none';
     if (s.qrImage) $('qrimg').src = s.qrImage;
     $('relink').style.display = s.connection === 'open' ? 'block' : 'none';
     let meta = '';
-    if (s.pendingReply) meta = '⏳ Antwort geplant gegen ' + s.pendingReply + ' Uhr';
-    if (s.lastReply) meta += (meta ? ' · ' : '') + 'Letzte Antwort: ' + s.lastReply;
-    if (s.lastError) meta += (meta ? ' · ' : '') + 'Fehler: ' + s.lastError;
+    if (s.pendingReply) meta = t('metaPending') + s.pendingReply + t('metaPendingSuffix');
+    if (s.lastReply) meta += (meta ? ' · ' : '') + t('metaLastReply') + s.lastReply;
+    if (s.lastError) meta += (meta ? ' · ' : '') + t('metaError') + s.lastError;
     $('meta').textContent = meta;
   } catch (e) { /* keep last state */ }
 }
@@ -225,6 +388,19 @@ let ALL_MODELS = [];
 let SAVED_MODEL = '';
 let SAVED_FALLBACK = '';
 let MODELS_ERR = null;
+let API_KEY_SET = false;
+
+function applyMode() {
+  const mode = $('replyMode').value;
+  const isAi = mode === 'ai';
+  $('aiFields').style.display = isAi ? 'block' : 'none';
+  $('staticFields').style.display = isAi ? 'none' : 'block';
+  $('modeMeta').textContent = isAi ? t('modeActiveAi') : t('modeActiveStatic');
+  if (isAi && !API_KEY_SET && !$('openrouterApiKey').value.trim())
+    $('keyMeta').textContent = t('keyNeeded');
+  else
+    $('keyMeta').textContent = API_KEY_SET ? t('keySaved') : t('keyNone');
+}
 
 async function loadModels(selected, fallback) {
   SAVED_MODEL = selected || '';
@@ -241,7 +417,7 @@ async function loadModels(selected, fallback) {
 function formatCost(usd) {
   const cents = usd * 100;
   const s = cents >= 1 ? cents.toFixed(2) : cents.toPrecision(2);
-  return '≈ ' + s.replace('.', ',') + ' ¢/Antwort';
+  return '≈ ' + (LANG === 'de' ? s.replace('.', ',') : s) + t('costSuffix');
 }
 
 function fillSelect(sel, list, current) {
@@ -266,8 +442,8 @@ function renderModels() {
   const list = onlyFree ? ALL_MODELS.filter((m) => m.free) : ALL_MODELS.slice();
   fillSelect($('model'), list, current);
   $('modelMeta').textContent = MODELS_ERR
-    ? 'Modell-Liste nicht erreichbar — gespeichertes Modell wird genutzt.'
-    : list.length + (onlyFree ? ' Gratis-Modelle' : ' Modelle') + ' von OpenRouter';
+    ? t('modelsErr')
+    : list.length + (onlyFree ? t('modelsFree') : t('modelsAll'));
 }
 
 function renderFallback() {
@@ -281,10 +457,13 @@ async function loadConfig() {
   $('targetNumber').value = c.targetNumber || '';
   await loadModels(c.model, c.fallbackModel);
   $('persona').value = c.persona || '';
+  $('triggers').value = (c.triggers || []).join('\\n');
+  $('matchMode').value = c.matchMode || 'exact';
+  $('replyMode').value = c.replyMode || 'ai';
+  $('staticReplies').value = (c.staticReplies || []).join('\\n');
   $('oncePerDay').checked = !!c.oncePerDay;
-  $('keyMeta').textContent = c.apiKeySet
-    ? 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.'
-    : 'Noch kein Key gespeichert.';
+  API_KEY_SET = !!c.apiKeySet;
+  applyLang(c.lang || 'de');
 }
 
 $('cfg').addEventListener('submit', async (e) => {
@@ -294,25 +473,42 @@ $('cfg').addEventListener('submit', async (e) => {
     model: $('model').value,
     fallbackModel: $('fallbackModel').value,
     persona: $('persona').value,
+    triggers: $('triggers').value.split('\\n').map((t) => t.trim()).filter(Boolean),
+    matchMode: $('matchMode').value,
+    replyMode: $('replyMode').value,
+    staticReplies: $('staticReplies').value.split('\\n').map((s) => s.trim()).filter(Boolean),
     oncePerDay: $('oncePerDay').checked,
+    lang: LANG,
   };
   const key = $('openrouterApiKey').value.trim();
   if (key) payload.openrouterApiKey = key;
   const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload) });
-  $('saved').textContent = r.ok ? 'Gespeichert ✓' : 'Fehler beim Speichern';
+  $('saved').textContent = r.ok ? t('saved') : t('saveError');
   $('openrouterApiKey').value = '';
   await loadConfig();
   setTimeout(() => { $('saved').textContent = ''; }, 2500);
 });
 
 $('relink').addEventListener('click', async () => {
-  if (!confirm('WhatsApp abmelden und neuen QR-Code anzeigen?')) return;
+  if (!confirm(t('relinkConfirm'))) return;
   await fetch('/api/relink', { method:'POST' });
 });
 
-$('freeOnly').addEventListener('change', renderModels);
+function switchLang(lang) {
+  if (lang === LANG) return;
+  applyLang(lang);
+  fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ lang: LANG }) });
+}
+$('langDe').addEventListener('click', () => switchLang('de'));
+$('langEn').addEventListener('click', () => switchLang('en'));
 
+$('freeOnly').addEventListener('change', renderModels);
+$('replyMode').addEventListener('change', applyMode);
+$('openrouterApiKey').addEventListener('input', applyMode);
+
+applyLang('de');
 loadConfig();
 refresh();
 setInterval(refresh, 2000);

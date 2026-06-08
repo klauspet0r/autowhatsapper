@@ -19,6 +19,12 @@ through a small built-in web page.
 > bot the practical risk is low, but not zero. Don't use it for spam or mass
 > messaging — that's both against the ToS and not what this project is for.
 
+## Documentation
+
+- [⚡ 60-second quickstart](#-60-second-quickstart) — clone, install, scan, done
+- [Configuration](#configuration) — settings, AI vs. static mode, env vars
+- [Raspberry Pi guide (DEPLOY.md)](DEPLOY.md) — run it 24/7 as a `systemd` service
+
 ## Features
 
 - **Daily-varied replies** — each answer is generated via [OpenRouter](https://openrouter.ai/)
@@ -50,6 +56,20 @@ WhatsApp (your phone)
 
 Configuration and live status (connection, QR, last reply, pending reply) are
 served by a minimal vanilla-Node web UI — no framework, no build step.
+
+## ⚡ 60-second quickstart
+
+```bash
+git clone https://github.com/klauspet0r/autowhatsapper.git
+cd autowhatsapper
+npm install
+npm start
+```
+
+Then open **http://127.0.0.1:8080** and scan the QR with WhatsApp.
+
+Prefer a guided first run? `npm run setup` walks you through the target number,
+API key, and persona on the command line — then just `npm start` and scan the QR.
 
 ## Quick start (local)
 
@@ -89,6 +109,9 @@ All settings are edited in the web UI (no config files to hand-edit):
 The UI's model dropdown lists every OpenRouter model with an estimated per-reply
 cost, and can filter to free models only.
 
+**AI is optional:** switch the reply mode to *static* to answer from your own
+predefined texts instead — no OpenRouter key needed.
+
 ### Environment variables
 
 | Variable    | Default       | Purpose                          |
@@ -121,7 +144,9 @@ your LAN with a firewall rule.
 
 Runtime files — `config.json` (your key + number), `auth/` (the WhatsApp
 session), and `state.json` (once-per-day + pending-reply state) — are created at
-runtime and are git-ignored. **Never commit them.**
+runtime and are git-ignored. **Never commit them.** `config.example.json` shows
+the shape of the generated `config.json` (placeholders only — the web UI writes
+the real file for you).
 
 ## Built with
 

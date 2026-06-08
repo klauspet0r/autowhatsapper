@@ -4,6 +4,9 @@ Runs autowhatsapper 24/7 as a `systemd` service that restarts on boot and on cra
 All configuration and WhatsApp linking happen in the built-in web UI — nothing is
 edited by hand on the Pi.
 
+> Just want to run it locally on your own machine? See the
+> [60-second quickstart](README.md#-60-second-quickstart) in the README instead.
+
 Assumes user `pi` and path `/home/pi/autowhatsapper`. If yours differ, adjust the
 paths below **and** the `User=` / `WorkingDirectory=` / `ExecStart=` lines in
 `autowhatsapper.service`.
@@ -87,3 +90,6 @@ LAN subnet.
 systemctl status autowhatsapper
 journalctl -u autowhatsapper -f      # live logs
 ```
+
+> The bot links as a passive device (`markOnlineOnConnect: false`), so your phone
+> keeps receiving WhatsApp push notifications as usual while it runs.

@@ -26,7 +26,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "setup": "node setup.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
