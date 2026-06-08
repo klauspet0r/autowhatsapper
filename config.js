@@ -14,6 +14,8 @@ const DEFAULTS = {
     'Du bist mein freundlicher, leicht verschlafener Morgen-Buddy. ' +
     'Antworte herzlich und kurz auf Deutsch, mit maximal einem Emoji.',
   oncePerDay: true,
+  triggers: ['moin', 'moin moin', 'guten morgen'],
+  matchMode: 'exact',
 };
 
 function load() {

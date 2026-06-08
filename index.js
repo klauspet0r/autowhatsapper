@@ -25,17 +25,26 @@ let replyScheduled = false; // a delayed reply is currently pending
 const MIN_DELAY_MS = 5 * 60 * 1000;
 const MAX_DELAY_MS = 30 * 60 * 1000;
 
-// ---- Greeting detection ----------------------------------------------------
-// Strict: reply ONLY when the whole message is "Moin", "Moin Moin" or
-// "Guten Morgen". Emojis, punctuation and digits are stripped first, so
-// "Moin 😊" or "Guten Morgen!" still match, but "Guten Morgen, wie geht's?" does not.
-function isGoodMorning(text) {
-  const cleaned = (text || '')
+// ---- Trigger detection -----------------------------------------------------
+// Reply when the message matches one of the configured triggers. Emojis,
+// punctuation and digits are stripped first, so "Moin 😊" or "Guten Morgen!"
+// still match. In 'exact' mode the whole cleaned message must equal a trigger,
+// so "Guten Morgen, wie geht's?" does not match; in 'contains' mode it suffices
+// that the cleaned message contains a trigger.
+function clean(text) {
+  return (text || '')
     .toLowerCase()
     .replace(/[^\p{L}\s]/gu, ' ') // keep letters + whitespace, drop emoji/punctuation/digits
     .replace(/\s+/g, ' ')
     .trim();
-  return cleaned === 'moin' || cleaned === 'moin moin' || cleaned === 'guten morgen';
+}
+
+function matchesTrigger(text, cfg) {
+  const cleaned = clean(text);
+  const triggers = (cfg.triggers || []).map(clean).filter(Boolean);
+  if (cfg.matchMode === 'contains')
+    return triggers.some((t) => cleaned.includes(t));
+  return triggers.some((t) => cleaned === t);
 }
 
 // ---- Once-per-day guard ----------------------------------------------------
@@ -295,7 +304,7 @@ async function startSock() {
       const text =
         msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
-      if (!isGoodMorning(text)) continue;
+      if (!matchesTrigger(text, cfg)) continue;
       if (replyScheduled) continue; // a reply is already pending
       if (alreadyRepliedToday()) {
         console.log('Already replied today, skipping.');
