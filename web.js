@@ -192,27 +192,32 @@ const PAGE = `<!doctype html>
         <option value="ai">KI (OpenRouter)</option>
         <option value="static">Feste Texte</option>
       </select>
+      <div class="meta" id="modeMeta"></div>
 
-      <label>Feste Antworten (eine pro Zeile)</label>
-      <textarea id="staticReplies"></textarea>
-
-      <label>OpenRouter API Key</label>
-      <input id="openrouterApiKey" type="password" autocomplete="off" placeholder="sk-or-…">
-      <div class="meta" id="keyMeta"></div>
-
-      <label>Modell</label>
-      <div class="row" style="margin-top:0">
-        <input id="freeOnly" type="checkbox">
-        <label style="margin:0">Nur Gratis-Modelle anzeigen</label>
+      <div id="staticFields">
+        <label>Feste Antworten (eine pro Zeile)</label>
+        <textarea id="staticReplies"></textarea>
       </div>
-      <select id="model"></select>
-      <div class="meta" id="modelMeta"></div>
 
-      <label>Fallback-Modell (falls das Hauptmodell streikt)</label>
-      <select id="fallbackModel"></select>
+      <div id="aiFields">
+        <label>OpenRouter API Key</label>
+        <input id="openrouterApiKey" type="password" autocomplete="off" placeholder="sk-or-…">
+        <div class="meta" id="keyMeta"></div>
 
-      <label>Persona (wie der Bot klingt)</label>
-      <textarea id="persona"></textarea>
+        <label>Modell</label>
+        <div class="row" style="margin-top:0">
+          <input id="freeOnly" type="checkbox">
+          <label style="margin:0">Nur Gratis-Modelle anzeigen</label>
+        </div>
+        <select id="model"></select>
+        <div class="meta" id="modelMeta"></div>
+
+        <label>Fallback-Modell (falls das Hauptmodell streikt)</label>
+        <select id="fallbackModel"></select>
+
+        <label>Persona (wie der Bot klingt)</label>
+        <textarea id="persona"></textarea>
+      </div>
 
       <label>Trigger (ein Wort/Satz pro Zeile)</label>
       <textarea id="triggers"></textarea>
@@ -261,6 +266,21 @@ let ALL_MODELS = [];
 let SAVED_MODEL = '';
 let SAVED_FALLBACK = '';
 let MODELS_ERR = null;
+let API_KEY_SET = false;
+
+function applyMode() {
+  const mode = $('replyMode').value;
+  const isAi = mode === 'ai';
+  $('aiFields').style.display = isAi ? 'block' : 'none';
+  $('staticFields').style.display = isAi ? 'none' : 'block';
+  $('modeMeta').textContent = isAi ? 'Aktiv: KI' : 'Aktiv: Feste Texte';
+  if (isAi && !API_KEY_SET && !$('openrouterApiKey').value.trim())
+    $('keyMeta').textContent = 'OpenRouter-Key nötig für den KI-Modus.';
+  else
+    $('keyMeta').textContent = API_KEY_SET
+      ? 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.'
+      : 'Noch kein Key gespeichert.';
+}
 
 async function loadModels(selected, fallback) {
   SAVED_MODEL = selected || '';
@@ -322,9 +342,8 @@ async function loadConfig() {
   $('replyMode').value = c.replyMode || 'ai';
   $('staticReplies').value = (c.staticReplies || []).join('\\n');
   $('oncePerDay').checked = !!c.oncePerDay;
-  $('keyMeta').textContent = c.apiKeySet
-    ? 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.'
-    : 'Noch kein Key gespeichert.';
+  API_KEY_SET = !!c.apiKeySet;
+  applyMode();
 }
 
 $('cfg').addEventListener('submit', async (e) => {
@@ -356,6 +375,8 @@ $('relink').addEventListener('click', async () => {
 });
 
 $('freeOnly').addEventListener('change', renderModels);
+$('replyMode').addEventListener('change', applyMode);
+$('openrouterApiKey').addEventListener('input', applyMode);
 
 loadConfig();
 refresh();
