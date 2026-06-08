@@ -73,6 +73,8 @@ function startServer(hooks) {
           fallbackModel: c.fallbackModel,
           persona: c.persona,
           oncePerDay: c.oncePerDay,
+          triggers: c.triggers,
+          matchMode: c.matchMode,
           apiKeySet: Boolean(c.openrouterApiKey),
         });
         return;
@@ -87,6 +89,13 @@ function startServer(hooks) {
         if (typeof body.fallbackModel === 'string') patch.fallbackModel = body.fallbackModel.trim();
         if (typeof body.persona === 'string') patch.persona = body.persona;
         if (typeof body.oncePerDay === 'boolean') patch.oncePerDay = body.oncePerDay;
+        if (Array.isArray(body.triggers))
+          patch.triggers = body.triggers
+            .filter((t) => typeof t === 'string')
+            .map((t) => t.trim())
+            .filter(Boolean);
+        if (body.matchMode === 'exact' || body.matchMode === 'contains')
+          patch.matchMode = body.matchMode;
         // Only overwrite the key when a non-empty value is supplied.
         if (typeof body.openrouterApiKey === 'string' && body.openrouterApiKey.trim())
           patch.openrouterApiKey = body.openrouterApiKey.trim();
@@ -187,6 +196,15 @@ const PAGE = `<!doctype html>
       <label>Persona (wie der Bot klingt)</label>
       <textarea id="persona"></textarea>
 
+      <label>Trigger (ein Wort/Satz pro Zeile)</label>
+      <textarea id="triggers"></textarea>
+
+      <label>Trefferart</label>
+      <select id="matchMode">
+        <option value="exact">Exakt</option>
+        <option value="contains">Enthält</option>
+      </select>
+
       <div class="row">
         <input id="oncePerDay" type="checkbox">
         <label style="margin:0">Nur auf den ersten Gruß pro Tag antworten</label>
@@ -281,6 +299,8 @@ async function loadConfig() {
   $('targetNumber').value = c.targetNumber || '';
   await loadModels(c.model, c.fallbackModel);
   $('persona').value = c.persona || '';
+  $('triggers').value = (c.triggers || []).join('\\n');
+  $('matchMode').value = c.matchMode || 'exact';
   $('oncePerDay').checked = !!c.oncePerDay;
   $('keyMeta').textContent = c.apiKeySet
     ? 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.'
@@ -294,6 +314,8 @@ $('cfg').addEventListener('submit', async (e) => {
     model: $('model').value,
     fallbackModel: $('fallbackModel').value,
     persona: $('persona').value,
+    triggers: $('triggers').value.split('\\n').map((t) => t.trim()).filter(Boolean),
+    matchMode: $('matchMode').value,
     oncePerDay: $('oncePerDay').checked,
   };
   const key = $('openrouterApiKey').value.trim();
