@@ -184,7 +184,7 @@ function produceReply(incomingText) {
 }
 
 // ---- OpenRouter model list (for the UI dropdown) ---------------------------
-// Rough token counts for one good-morning reply, used to estimate per-reply cost.
+// Rough token counts for one short reply, used to estimate per-reply cost.
 const EST_INPUT_TOKENS = 200;
 const EST_OUTPUT_TOKENS = 80;
 let modelsCache = { at: 0, list: null };
@@ -285,7 +285,7 @@ async function startSock() {
     if (connection === 'open') {
       status.connection = 'open';
       status.qr = null;
-      console.log(`Connected. Watching for good-morning messages from ${cfg.targetNumber}.`);
+      console.log(`Connected. Watching for trigger-matching messages from ${cfg.targetNumber}.`);
       resumePending();
     }
 
