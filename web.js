@@ -173,6 +173,16 @@ const PAGE = `<!doctype html>
     font: inherit; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; }
   .lang button:hover { background: #262b34; color: #e6e8eb; }
   .lang button.active { color: #e6e8eb; background: #262b34; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+  .chips:empty { display: none; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: #262b34;
+    border: 1px solid #313845; border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 13px; }
+  .chip button { all: unset; cursor: pointer; width: 18px; height: 18px; line-height: 18px;
+    text-align: center; border-radius: 50%; color: #8b929c; font-size: 14px; }
+  .chip button:hover { background: #ef4444; color: #fff; }
+  .chip-add { display: flex; gap: 8px; }
+  .chip-add input { flex: 1; }
+  .chip-add button { width: auto; margin: 0; flex: none; padding: 0 14px; }
 </style>
 </head>
 <body>
@@ -213,7 +223,11 @@ const PAGE = `<!doctype html>
 
       <div id="staticFields">
         <label data-i18n="staticReplies"></label>
-        <textarea id="staticReplies"></textarea>
+        <div class="chips" id="staticRepliesChips"></div>
+        <div class="chip-add">
+          <input id="staticRepliesInput" data-i18n-ph="staticRepliesPh">
+          <button type="button" class="ghost" id="staticRepliesAddBtn" data-i18n="add"></button>
+        </div>
       </div>
 
       <div id="aiFields">
@@ -237,7 +251,11 @@ const PAGE = `<!doctype html>
       </div>
 
       <label data-i18n="triggers"></label>
-      <textarea id="triggers"></textarea>
+      <div class="chips" id="triggersChips"></div>
+      <div class="chip-add">
+        <input id="triggersInput" data-i18n-ph="triggersPh">
+        <button type="button" class="ghost" id="triggersAddBtn" data-i18n="add"></button>
+      </div>
 
       <label data-i18n="matchMode"></label>
       <select id="matchMode">
@@ -277,7 +295,9 @@ const I18N = {
     modeStatic: 'Feste Texte',
     modeActiveAi: 'Aktiv: KI',
     modeActiveStatic: 'Aktiv: Feste Texte',
-    staticReplies: 'Feste Antworten (eine pro Zeile)',
+    staticReplies: 'Feste Antworten',
+    staticRepliesPh: 'Antworttext eingeben',
+    add: 'Hinzufügen',
     apiKey: 'OpenRouter API Key',
     keyNeeded: 'OpenRouter-Key nötig für den KI-Modus.',
     keySaved: 'Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.',
@@ -290,7 +310,8 @@ const I18N = {
     costSuffix: ' ¢/Antwort',
     fallbackModel: 'Fallback-Modell (falls das Hauptmodell streikt)',
     persona: 'Persona (wie der Bot klingt)',
-    triggers: 'Trigger (ein Wort/Satz pro Zeile)',
+    triggers: 'Trigger',
+    triggersPh: 'Wort/Satz eingeben',
     matchMode: 'Trefferart',
     matchExact: 'Exakt',
     matchContains: 'Enthält',
@@ -320,7 +341,9 @@ const I18N = {
     modeStatic: 'Fixed texts',
     modeActiveAi: 'Active: AI',
     modeActiveStatic: 'Active: Fixed texts',
-    staticReplies: 'Fixed replies (one per line)',
+    staticReplies: 'Fixed replies',
+    staticRepliesPh: 'Enter reply text',
+    add: 'Add',
     apiKey: 'OpenRouter API key',
     keyNeeded: 'OpenRouter key required for AI mode.',
     keySaved: 'A key is saved. Leave the field empty to keep it.',
@@ -333,7 +356,8 @@ const I18N = {
     costSuffix: ' ¢/reply',
     fallbackModel: 'Fallback model (if the main model fails)',
     persona: 'Persona (how the bot sounds)',
-    triggers: 'Triggers (one word/phrase per line)',
+    triggers: 'Triggers',
+    triggersPh: 'Enter word/phrase',
     matchMode: 'Match type',
     matchExact: 'Exact',
     matchContains: 'Contains',
@@ -356,6 +380,9 @@ function applyLang(lang) {
   document.documentElement.lang = LANG;
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph')));
   });
   $('langDe').classList.toggle('active', LANG === 'de');
   $('langEn').classList.toggle('active', LANG === 'en');
@@ -389,6 +416,46 @@ let SAVED_MODEL = '';
 let SAVED_FALLBACK = '';
 let MODELS_ERR = null;
 let API_KEY_SET = false;
+
+// Chip lists for triggers and static replies — the source of truth on save.
+const CHIPS = { triggers: [], staticReplies: [] };
+
+function renderChips(name) {
+  const box = $(name + 'Chips');
+  box.innerHTML = '';
+  CHIPS[name].forEach((val, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    const label = document.createElement('span');
+    label.textContent = val;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.setAttribute('aria-label', 'remove');
+    x.addEventListener('click', () => { CHIPS[name].splice(i, 1); renderChips(name); });
+    chip.appendChild(label);
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+
+function addChip(name) {
+  const input = $(name + 'Input');
+  const val = input.value.trim();
+  if (val && !CHIPS[name].includes(val)) {
+    CHIPS[name].push(val);
+    renderChips(name);
+  }
+  input.value = '';
+  input.focus();
+}
+
+['triggers', 'staticReplies'].forEach((name) => {
+  $(name + 'AddBtn').addEventListener('click', () => addChip(name));
+  $(name + 'Input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addChip(name); }
+  });
+});
 
 function applyMode() {
   const mode = $('replyMode').value;
@@ -457,10 +524,12 @@ async function loadConfig() {
   $('targetNumber').value = c.targetNumber || '';
   await loadModels(c.model, c.fallbackModel);
   $('persona').value = c.persona || '';
-  $('triggers').value = (c.triggers || []).join('\\n');
+  CHIPS.triggers = (c.triggers || []).slice();
+  renderChips('triggers');
   $('matchMode').value = c.matchMode || 'exact';
   $('replyMode').value = c.replyMode || 'ai';
-  $('staticReplies').value = (c.staticReplies || []).join('\\n');
+  CHIPS.staticReplies = (c.staticReplies || []).slice();
+  renderChips('staticReplies');
   $('oncePerDay').checked = !!c.oncePerDay;
   API_KEY_SET = !!c.apiKeySet;
   applyLang(c.lang || 'de');
@@ -473,10 +542,10 @@ $('cfg').addEventListener('submit', async (e) => {
     model: $('model').value,
     fallbackModel: $('fallbackModel').value,
     persona: $('persona').value,
-    triggers: $('triggers').value.split('\\n').map((t) => t.trim()).filter(Boolean),
+    triggers: CHIPS.triggers.slice(),
     matchMode: $('matchMode').value,
     replyMode: $('replyMode').value,
-    staticReplies: $('staticReplies').value.split('\\n').map((s) => s.trim()).filter(Boolean),
+    staticReplies: CHIPS.staticReplies.slice(),
     oncePerDay: $('oncePerDay').checked,
     lang: LANG,
   };
