@@ -23,7 +23,7 @@ let replyScheduled = false; // a delayed reply is currently pending
 let replyTimer = null; // setTimeout handle for the pending reply
 let pendingContext = null; // { incomingText, targetJid } for the pending reply
 
-// Wait a random 5-30 min after a greeting before replying, so it doesn't look automated.
+// Wait a random 5-30 min after a match before replying, so it doesn't look automated.
 const MIN_DELAY_MS = 5 * 60 * 1000;
 const MAX_DELAY_MS = 30 * 60 * 1000;
 
@@ -186,7 +186,7 @@ function produceReply(incomingText) {
 }
 
 // ---- OpenRouter model list (for the UI dropdown) ---------------------------
-// Rough token counts for one good-morning reply, used to estimate per-reply cost.
+// Rough token counts for one short reply, used to estimate per-reply cost.
 const EST_INPUT_TOKENS = 200;
 const EST_OUTPUT_TOKENS = 80;
 let modelsCache = { at: 0, list: null };
@@ -305,7 +305,7 @@ async function startSock() {
     if (connection === 'open') {
       status.connection = 'open';
       status.qr = null;
-      console.log(`Connected. Watching for good-morning messages from ${cfg.targetNumber}.`);
+      console.log(`Connected. Watching for trigger-matching messages from ${cfg.targetNumber}.`);
       resumePending();
     }
 

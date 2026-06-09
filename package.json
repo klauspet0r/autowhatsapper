@@ -1,7 +1,7 @@
 {
   "name": "autowhatsapper",
   "version": "1.0.0",
-  "description": "Auto-replies to a specific contact's good-morning messages on WhatsApp, with a fresh AI-generated reply each day",
+  "description": "Auto-replies to a specific WhatsApp contact when configured triggers match, using static or AI-generated replies",
   "main": "index.js",
   "type": "commonjs",
   "author": "klauspet0r",
