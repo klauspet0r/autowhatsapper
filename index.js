@@ -23,7 +23,7 @@ let replyScheduled = false; // a delayed reply is currently pending
 let replyTimer = null; // setTimeout handle for the pending reply
 let pendingContext = null; // { incomingText, targetJid } for the pending reply
 
-// Wait a random 5-30 min after a greeting before replying, so it doesn't look automated.
+// Wait a random 5-30 min after a match before replying, so it doesn't look automated.
 const MIN_DELAY_MS = 5 * 60 * 1000;
 const MAX_DELAY_MS = 30 * 60 * 1000;
 
