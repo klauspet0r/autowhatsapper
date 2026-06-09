@@ -1,17 +1,17 @@
 # autowhatsapper
 
-> A tiny WhatsApp bot that answers one friend's morning greeting for you — with a
-> fresh, AI-written reply every day, so it never reads like a canned message.
+> A tiny WhatsApp bot that auto-replies to one contact when their message
+> matches your own triggers — with either static replies or fresh AI-written text.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Made for Raspberry Pi](https://img.shields.io/badge/runs%20on-Raspberry%20Pi-c51a4a?logo=raspberrypi&logoColor=white)](DEPLOY.md)
 
-When a specific contact sends "Moin", "Moin Moin" or "Guten Morgen",
-autowhatsapper waits a natural-looking few minutes and replies with a one-off,
-AI-generated good-morning message. It links to your personal WhatsApp account
-like WhatsApp Web — no business API, no browser — and is configured entirely
-through a small built-in web page.
+When a specific contact sends a message that matches your configured keywords
+or keyphrases, autowhatsapper waits a natural-looking few minutes and replies
+with either a predefined message or a one-off AI-generated answer. It links to
+your personal WhatsApp account like WhatsApp Web — no business API, no browser
+— and is configured entirely through a small built-in web page.
 
 > [!WARNING]
 > This uses an **unofficial library with your personal account**, which is
@@ -27,12 +27,14 @@ through a small built-in web page.
 
 ## Features
 
-- **Daily-varied replies** — each answer is generated via [OpenRouter](https://openrouter.ai/)
-  (default model Claude Haiku 4.5), so the wording is different every morning.
-- **Looks human** — replies fire after a random 5–30 minute delay, carry exactly
-  one fitting emoji, and (optionally) only the first greeting per day is answered.
-- **Strict trigger** — only fires when the *whole* message is a greeting
-  ("Moin" / "Moin Moin" / "Guten Morgen"); "Guten Morgen, wie geht's?" is ignored.
+- **AI or static replies** — generate a fresh answer via [OpenRouter](https://openrouter.ai/)
+  (default model Claude Haiku 4.5), or pick from your own predefined replies.
+- **Looks human** — replies fire after a random 5–30 minute delay and, in AI
+  mode, can include one fitting emoji. Optionally answer only the first matching
+  message per day.
+- **Configurable triggers** — reply when the *whole* message matches one of your
+  keywords/keyphrases by default (for example "Moin", "Moin Moin" or
+  "Guten Morgen"). In includes mode, trigger text can match inside longer messages.
 - **No file editing** — set the API key, target number, model, and persona in a
   built-in web UI, and scan the WhatsApp linking QR right in your browser.
 - **Resilient** — survives restarts (a pending reply resumes), retries on model
@@ -43,15 +45,15 @@ through a small built-in web page.
 
 ```
 WhatsApp (your phone)
-        │  greeting from the target contact
+        │  message from the target contact
         ▼
-   Baileys socket  ──►  greeting matched?  ──►  wait 5–30 min
-   (linked device)                                   │
-                                                      ▼
-                              OpenRouter (Claude Haiku 4.5) generates a reply
-                                                      │
-                                                      ▼
-                                   reply sent back to the contact
+   Baileys socket  ──►  trigger matched?  ──►  wait 5–30 min
+   (linked device)                                  │
+                                                     ▼
+                         static reply or OpenRouter-generated answer
+                                                     │
+                                                     ▼
+                                  reply sent back to the contact
 ```
 
 Configuration and live status (connection, QR, last reply, pending reply) are
@@ -104,7 +106,7 @@ All settings are edited in the web UI (no config files to hand-edit):
 | Model          | OpenRouter model slug (default `anthropic/claude-haiku-4.5`)     |
 | Fallback model | Used if the primary model fails after retries                    |
 | Persona        | Free text describing how the bot should sound                    |
-| Once per day   | Reply only to the first greeting each day                        |
+| Once per day   | Reply only to the first matching message each day                |
 
 The UI's model dropdown lists every OpenRouter model with an estimated per-reply
 cost, and can filter to free models only.
@@ -136,7 +138,7 @@ your LAN with a firewall rule.
 
 | File                     | Role                                                       |
 |--------------------------|------------------------------------------------------------|
-| `index.js`               | Bot core — WhatsApp connection, greeting match, scheduling |
+| `index.js`               | Bot core — WhatsApp connection, trigger matching, scheduling |
 | `web.js`                 | Built-in config web UI (vanilla Node `http`)               |
 | `config.js`              | Loads/saves the web-editable `config.json`                 |
 | `autowhatsapper.service` | `systemd` unit for the Raspberry Pi                        |
