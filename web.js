@@ -30,7 +30,7 @@ function readBody(req) {
   });
 }
 
-// hooks: { getState, getConfig, saveConfig, relink }
+// hooks: { getState, getConfig, saveConfig, relink, sendNow }
 function startServer(hooks) {
   const server = http.createServer(async (req, res) => {
     try {
@@ -121,6 +121,12 @@ function startServer(hooks) {
         return;
       }
 
+      if (req.method === 'POST' && req.url === '/api/send-now') {
+        const sent = await hooks.sendNow();
+        sendJson(res, 200, { ok: true, sent });
+        return;
+      }
+
       res.writeHead(404).end('Not found');
     } catch (err) {
       sendJson(res, 500, { error: err.message });
@@ -206,6 +212,7 @@ const PAGE = `<!doctype html>
       <div class="hint" data-i18n="qrHint"></div>
     </div>
     <div id="meta" class="meta"></div>
+    <button id="sendNow" style="display:none" data-i18n="sendNow"></button>
     <button id="relink" class="ghost" style="display:none" data-i18n="relink"></button>
   </div>
 
@@ -289,6 +296,7 @@ const I18N = {
     qrHint: 'WhatsApp → Verknüpfte Geräte → Gerät verknüpfen → QR scannen',
     relink: 'Neu verknüpfen (abmelden)',
     relinkConfirm: 'WhatsApp abmelden und neuen QR-Code anzeigen?',
+    sendNow: 'Jetzt senden',
     targetNumber: 'Zielnummer (Landesvorwahl, ohne +)',
     replyMode: 'Antwort-Modus',
     modeAi: 'KI (OpenRouter)',
@@ -335,6 +343,7 @@ const I18N = {
     qrHint: 'WhatsApp → Linked devices → Link a device → Scan QR',
     relink: 'Re-link (log out)',
     relinkConfirm: 'Log out of WhatsApp and show a new QR code?',
+    sendNow: 'Send now',
     targetNumber: 'Target number (country code, without +)',
     replyMode: 'Reply mode',
     modeAi: 'AI (OpenRouter)',
@@ -403,6 +412,7 @@ async function refresh() {
     $('qrbox').style.display = s.qrImage ? 'block' : 'none';
     if (s.qrImage) $('qrimg').src = s.qrImage;
     $('relink').style.display = s.connection === 'open' ? 'block' : 'none';
+    $('sendNow').style.display = s.pendingReply ? 'block' : 'none';
     let meta = '';
     if (s.pendingReply) meta = t('metaPending') + s.pendingReply + t('metaPendingSuffix');
     if (s.lastReply) meta += (meta ? ' · ' : '') + t('metaLastReply') + s.lastReply;
@@ -562,6 +572,13 @@ $('cfg').addEventListener('submit', async (e) => {
 $('relink').addEventListener('click', async () => {
   if (!confirm(t('relinkConfirm'))) return;
   await fetch('/api/relink', { method:'POST' });
+});
+
+$('sendNow').addEventListener('click', async () => {
+  $('sendNow').disabled = true;
+  try { await fetch('/api/send-now', { method:'POST' }); } catch (e) { /* refresh shows result */ }
+  await refresh();
+  $('sendNow').disabled = false;
 });
 
 function switchLang(lang) {

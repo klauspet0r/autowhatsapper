@@ -20,6 +20,8 @@ let cfg = config.load();
 const status = { connection: 'closed', qr: null, lastReply: null, lastError: null, pendingReply: null };
 let sock = null;
 let replyScheduled = false; // a delayed reply is currently pending
+let replyTimer = null; // setTimeout handle for the pending reply
+let pendingContext = null; // { incomingText, targetJid } for the pending reply
 
 // Wait a random 5-30 min after a greeting before replying, so it doesn't look automated.
 const MIN_DELAY_MS = 5 * 60 * 1000;
@@ -216,29 +218,47 @@ async function getModels() {
 // ---- Delayed reply scheduling ----------------------------------------------
 // The planned send time is persisted to state.json, so a restart during the
 // wait resumes the reply (see resumePending) instead of dropping it.
+// Produce and send the pending reply, then clear all pending state. Shared by
+// the scheduled timer and the manual "send now" path.
+async function fireReply() {
+  if (!pendingContext) return;
+  const { incomingText, targetJid } = pendingContext;
+  try {
+    const reply = await produceReply(incomingText);
+    await sock.sendMessage(targetJid, { text: reply });
+    markRepliedToday();
+    status.lastReply = reply;
+    status.lastError = null;
+    console.log(`Replied: ${reply}`);
+  } catch (err) {
+    status.lastError = err.message;
+    console.error('Failed to reply:', err.message);
+  } finally {
+    clearPending();
+    replyScheduled = false;
+    replyTimer = null;
+    pendingContext = null;
+    status.pendingReply = null;
+  }
+}
+
 function armReply(at, incomingText, targetJid) {
   replyScheduled = true;
+  pendingContext = { incomingText, targetJid };
   status.pendingReply = new Date(at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const remaining = Math.max(0, at - Date.now());
   console.log(`Reply armed for ${status.pendingReply} (in ${Math.round(remaining / 60000)} min).`);
+  replyTimer = setTimeout(fireReply, remaining);
+}
 
-  setTimeout(async () => {
-    try {
-      const reply = await produceReply(incomingText);
-      await sock.sendMessage(targetJid, { text: reply });
-      markRepliedToday();
-      status.lastReply = reply;
-      status.lastError = null;
-      console.log(`Replied: ${reply}`);
-    } catch (err) {
-      status.lastError = err.message;
-      console.error('Failed to reply:', err.message);
-    } finally {
-      clearPending();
-      replyScheduled = false;
-      status.pendingReply = null;
-    }
-  }, remaining);
+// Skip the remaining wait and send the pending reply right away.
+async function sendPendingNow() {
+  if (!replyScheduled || !pendingContext) return false;
+  if (replyTimer) clearTimeout(replyTimer);
+  replyTimer = null;
+  console.log('Sending pending reply now (manual).');
+  await fireReply();
+  return true;
 }
 
 function scheduleReply(incomingText, targetJid) {
@@ -357,6 +377,7 @@ startServer({
     reload();
   },
   relink,
+  sendNow: sendPendingNow,
 });
 
 if (config.isConfigured(cfg)) {
