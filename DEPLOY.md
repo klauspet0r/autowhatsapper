@@ -23,7 +23,7 @@ rsync -av --exclude node_modules --exclude auth --exclude config.json --exclude 
   ./ pi@raspberrypi.local:/home/pi/autowhatsapper/
 ```
 
-(No `rsync`? Use `scp index.js web.js config.js package.json .gitignore README.md DEPLOY.md autowhatsapper.service pi@raspberrypi.local:/home/pi/autowhatsapper/`.)
+(No `rsync`? Use `scp index.js web.js config.js setup.js config.example.json package.json .gitignore README.md DEPLOY.md autowhatsapper.service pi@raspberrypi.local:/home/pi/autowhatsapper/`.)
 
 ## 2. Install Node + dependencies (on the Pi)
 

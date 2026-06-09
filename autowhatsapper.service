@@ -1,5 +1,5 @@
 [Unit]
-Description=autowhatsapper - WhatsApp good-morning auto-reply
+Description=autowhatsapper - WhatsApp trigger-based auto-reply
 After=network-online.target
 Wants=network-online.target
 
