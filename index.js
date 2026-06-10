@@ -28,11 +28,11 @@ const MIN_DELAY_MS = 5 * 60 * 1000;
 const MAX_DELAY_MS = 30 * 60 * 1000;
 
 // ---- Trigger detection -----------------------------------------------------
-// Reply when the message matches one of the configured triggers. Emojis,
+// Reply when the message matches one of the configured keywords. Emojis,
 // punctuation and digits are stripped first, so "Moin 😊" or "Guten Morgen!"
-// still match. In 'exact' mode the whole cleaned message must equal a trigger,
+// still match. In 'exact' mode the whole cleaned message must equal a keyword,
 // so "Guten Morgen, wie geht's?" does not match; in 'contains' mode it suffices
-// that the cleaned message contains a trigger.
+// that the cleaned message contains a keyword.
 function clean(text) {
   return (text || '')
     .toLowerCase()
@@ -41,12 +41,22 @@ function clean(text) {
     .trim();
 }
 
-function matchesTrigger(text, cfg) {
+// The keywords to match against depend on the reply mode: static mode matches
+// each rule's keyword; AI mode uses the flat triggers list.
+function activeKeywords(cfg) {
+  if (cfg.replyMode === 'static') return (cfg.staticRules || []).map((r) => r && r.keyword);
+  return cfg.triggers || [];
+}
+
+// Return the first configured keyword (raw form) that matches `text`, or null.
+function matchedKeyword(text, cfg) {
   const cleaned = clean(text);
-  const triggers = (cfg.triggers || []).map(clean).filter(Boolean);
-  if (cfg.matchMode === 'contains')
-    return triggers.some((t) => cleaned.includes(t));
-  return triggers.some((t) => cleaned === t);
+  for (const raw of activeKeywords(cfg)) {
+    const c = clean(raw);
+    if (!c) continue;
+    if (cfg.matchMode === 'contains' ? cleaned.includes(c) : cleaned === c) return raw;
+  }
+  return null;
 }
 
 // ---- Once-per-day guard ----------------------------------------------------
@@ -196,13 +206,17 @@ async function generateReply(incomingText) {
   throw lastErr || new Error('reply generation failed');
 }
 
-// Dispatch on the reply mode: in 'static' mode pick a random predefined text
-// (returned verbatim, no emoji enforcement), otherwise use the AI path.
+// Dispatch on the reply mode: in 'static' mode pick a random answer from the
+// matched keyword's set (returned verbatim, no emoji enforcement), otherwise use
+// the AI path. The keyword is re-derived from the message so the answer reflects
+// the current config even after the scheduling delay / a restart.
 function produceReply(incomingText) {
   if (cfg.replyMode === 'static') {
-    const replies = (cfg.staticReplies || []).filter((s) => s && s.trim());
-    if (replies.length === 0) throw new Error('no static replies configured');
-    return replies[Math.floor(Math.random() * replies.length)];
+    const keyword = matchedKeyword(incomingText, cfg);
+    const rule = (cfg.staticRules || []).find((r) => r && r.keyword === keyword);
+    const answers = (rule?.answers || []).filter((s) => s && s.trim());
+    if (answers.length === 0) throw new Error('no static answers for the matched keyword');
+    return answers[Math.floor(Math.random() * answers.length)];
   }
   return generateReply(incomingText);
 }
@@ -357,7 +371,7 @@ async function startSock() {
       const text =
         msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
-      if (!matchesTrigger(text, cfg)) continue;
+      if (!matchedKeyword(text, cfg)) continue;
       if (!isWithinActiveWindow(new Date(), cfg)) {
         console.log('Outside active window, not replying.');
         continue;
