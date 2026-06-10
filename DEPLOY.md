@@ -7,9 +7,10 @@ edited by hand on the Pi.
 > Just want to run it locally on your own machine? See the
 > [60-second quickstart](README.md#-60-second-quickstart) in the README instead.
 
-Assumes user `pi` and path `/home/pi/autowhatsapper`. If yours differ, adjust the
-paths below **and** the `User=` / `WorkingDirectory=` / `ExecStart=` lines in
-`autowhatsapper.service`.
+Examples below assume user `pi` and path `/home/pi/autowhatsapper`. The tracked
+`autowhatsapper.service` is generic — you set your user, path, and (optional) bind
+host/port in a **drop-in** you own (step 3), so updating the unit later never
+overwrites them. No tracked file needs editing.
 
 > The UI exposes your API key and the WhatsApp-linking QR, so it must not be
 > reachable from the internet. Pick **one** access mode in step 4. If your Pi has
@@ -23,7 +24,7 @@ rsync -av --exclude node_modules --exclude auth --exclude config.json --exclude 
   ./ pi@raspberrypi.local:/home/pi/autowhatsapper/
 ```
 
-(No `rsync`? Use `scp index.js web.js config.js setup.js config.example.json package.json .gitignore README.md DEPLOY.md autowhatsapper.service pi@raspberrypi.local:/home/pi/autowhatsapper/`.)
+(No `rsync`? Use `scp index.js web.js config.js setup.js config.example.json package.json .gitignore README.md DEPLOY.md autowhatsapper.service override.conf.example pi@raspberrypi.local:/home/pi/autowhatsapper/`.)
 
 ## 2. Install Node + dependencies (on the Pi)
 
@@ -34,18 +35,26 @@ cd ~/autowhatsapper
 npm install --omit=dev
 ```
 
-## 3. Install and start the service
+## 3. Install the service + your drop-in
+
+The tracked unit is generic; your host-specific settings go in a drop-in you own,
+so a later `cp` of an updated `autowhatsapper.service` never clobbers them.
 
 ```bash
 sudo cp autowhatsapper.service /etc/systemd/system/
+sudo mkdir -p /etc/systemd/system/autowhatsapper.service.d
+sudo cp override.conf.example /etc/systemd/system/autowhatsapper.service.d/override.conf
+sudoedit /etc/systemd/system/autowhatsapper.service.d/override.conf   # set User + WorkingDirectory
 sudo systemctl daemon-reload
 sudo systemctl enable --now autowhatsapper
 ```
 
-The bot starts unconfigured and just runs the web UI until you configure it.
-By default the UI binds to `127.0.0.1:8080`. Override with `WEB_HOST` / `WEB_PORT`
-via `Environment=` lines in the unit file — needed if port 8080 is already taken
-(e.g. by nginx), or to enable LAN access below.
+`User` and `WorkingDirectory` in the drop-in are **required** — the base unit omits
+them on purpose (without them the service would run as root from `/` and fail to
+find `index.js`). The bot then starts unconfigured and just runs the web UI until
+you configure it. By default the UI binds to `127.0.0.1:8080`; uncomment the
+`WEB_HOST` / `WEB_PORT` lines in the drop-in to change that — needed if port 8080
+is already taken (e.g. by nginx), or to enable LAN access below.
 
 ## 4. Configure + link — pick an access mode
 
@@ -70,7 +79,8 @@ Bind to all IPv4 interfaces **and** open the port only to your LAN subnet in the
 firewall (binding alone is not enough on a host with a public IP):
 
 ```bash
-# In autowhatsapper.service, add under [Service]:  (8765 = a free port)
+# In the drop-in, uncomment (8765 = a free port):
+#   /etc/systemd/system/autowhatsapper.service.d/override.conf
 #   Environment=WEB_HOST=0.0.0.0
 #   Environment=WEB_PORT=8765
 sudo systemctl daemon-reload && sudo systemctl restart autowhatsapper
