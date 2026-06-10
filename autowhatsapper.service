@@ -5,17 +5,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Adjust User and paths to match your Pi (see DEPLOY.md).
-User=pi
-WorkingDirectory=/home/pi/autowhatsapper
 ExecStart=/usr/bin/node index.js
 Restart=always
 RestartSec=10
-# Settings live in config.json (written by the web UI); no env config needed.
-# UI binds to 127.0.0.1:8080 by default. To override (e.g. for LAN access or a
-# port clash), uncomment and pair with a LAN-scoped firewall rule (see DEPLOY.md):
-#Environment=WEB_HOST=0.0.0.0
-#Environment=WEB_PORT=8765
+# This unit is generic on purpose. Your host-specific settings — User,
+# WorkingDirectory (where you copied the code), and optional WEB_HOST/WEB_PORT —
+# live in a drop-in you own, so updating this file never overwrites them:
+#   /etc/systemd/system/autowhatsapper.service.d/override.conf
+# Copy override.conf.example there and fill it in (see DEPLOY.md). User and
+# WorkingDirectory are required there — without them the service runs as root
+# from / and can't find index.js.
 
 [Install]
 WantedBy=multi-user.target
