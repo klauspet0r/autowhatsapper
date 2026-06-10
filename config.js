@@ -17,13 +17,28 @@ const DEFAULTS = {
   triggers: ['moin', 'moin moin', 'guten morgen'],
   matchMode: 'exact',
   replyMode: 'ai',
-  staticReplies: [],
+  staticRules: [], // [{ keyword, answers: [] }] — per-keyword static answers
+  activeStart: '', // HH:MM; empty start/end = always active
+  activeEnd: '',
   lang: 'de',
 };
 
+// One-time migration: turn a legacy flat `staticReplies` list into per-keyword
+// `staticRules`, giving every configured trigger the old answer set so existing
+// static setups keep working.
+function migrate(cfg) {
+  if ((!cfg.staticRules || cfg.staticRules.length === 0)
+      && Array.isArray(cfg.staticReplies) && cfg.staticReplies.length > 0) {
+    const answers = cfg.staticReplies.filter((s) => s && s.trim());
+    cfg.staticRules = (cfg.triggers || []).map((k) => ({ keyword: k, answers: [...answers] }));
+  }
+  delete cfg.staticReplies; // one-shot: drop the legacy key so it can't re-migrate
+  return cfg;
+}
+
 function load() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) };
+    return migrate({ ...DEFAULTS, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) });
   } catch {
     return { ...DEFAULTS };
   }
@@ -38,7 +53,10 @@ function save(patch) {
 
 function isConfigured(cfg) {
   if (!cfg.targetNumber) return false;
-  if (cfg.replyMode === 'static') return (cfg.staticReplies || []).some((s) => s && s.trim());
+  if (cfg.replyMode === 'static')
+    return (cfg.staticRules || []).some(
+      (r) => r && r.keyword && r.keyword.trim() && (r.answers || []).some((a) => a && a.trim())
+    );
   return Boolean(cfg.openrouterApiKey);
 }
 
