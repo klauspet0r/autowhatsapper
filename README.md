@@ -103,14 +103,15 @@ All settings are edited in the web UI (no config files to hand-edit):
 |----------------|------------------------------------------------------------------|
 | Target number  | Friend's number, country code, no `+` (e.g. `491701234567`)      |
 | Reply mode     | *AI* (OpenRouter) or *static* (your own predefined texts)        |
-| Static replies | Texts to pick from at random in static mode (one per chip)       |
-| Triggers       | Keywords/phrases that trigger a reply (one per chip)             |
+| Static answers | Per keyword: a set of answers, one picked at random on a match (static mode) |
+| Triggers       | Keywords/phrases that trigger a reply (AI mode; one per chip)    |
 | Match type     | *Exact* (whole message) or *contains* (matches inside a message) |
 | API key        | OpenRouter key from <https://openrouter.ai/keys> (AI mode)       |
 | Model          | OpenRouter model slug (default `anthropic/claude-haiku-4.5`)     |
 | Fallback model | Used if the primary model fails after retries                    |
 | Persona        | Free text describing how the bot should sound (AI mode)          |
 | Once per day   | Reply only to the first matching message each day                |
+| Active window  | Only reply to messages arriving in an HH:MM window (empty = always) |
 | Language       | UI language — German or English                                  |
 
 The UI's model dropdown lists every OpenRouter model with an estimated per-reply

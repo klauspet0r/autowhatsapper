@@ -76,7 +76,7 @@ function startServer(hooks) {
           triggers: c.triggers,
           matchMode: c.matchMode,
           replyMode: c.replyMode,
-          staticReplies: c.staticReplies,
+          staticRules: c.staticRules,
           activeStart: c.activeStart,
           activeEnd: c.activeEnd,
           lang: c.lang,
@@ -104,11 +104,16 @@ function startServer(hooks) {
         if (body.replyMode === 'ai' || body.replyMode === 'static')
           patch.replyMode = body.replyMode;
         if (body.lang === 'de' || body.lang === 'en') patch.lang = body.lang;
-        if (Array.isArray(body.staticReplies))
-          patch.staticReplies = body.staticReplies
-            .filter((s) => typeof s === 'string')
-            .map((s) => s.trim())
-            .filter(Boolean);
+        if (Array.isArray(body.staticRules))
+          patch.staticRules = body.staticRules
+            .filter((r) => r && typeof r.keyword === 'string')
+            .map((r) => ({
+              keyword: r.keyword.trim(),
+              answers: Array.isArray(r.answers)
+                ? r.answers.filter((a) => typeof a === 'string').map((a) => a.trim()).filter(Boolean)
+                : [],
+            }))
+            .filter((r) => r.keyword);
         // Active window: accept HH:MM (24h) or empty (= always active).
         const HM = /^([01]?\d|2[0-3]):[0-5]\d$/;
         for (const k of ['activeStart', 'activeEnd'])
@@ -196,6 +201,10 @@ const PAGE = `<!doctype html>
   .chip-add { display: flex; gap: 8px; }
   .chip-add input { flex: 1; }
   .chip-add button { width: auto; margin: 0; flex: none; padding: 0 14px; }
+  .rule { border: 1px solid #2b313b; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .rule-head { display: flex; gap: 8px; margin-bottom: 8px; }
+  .rule-head input { flex: 1; }
+  .rule-del { width: auto; margin: 0; flex: none; padding: 0 12px; }
 </style>
 </head>
 <body>
@@ -236,12 +245,10 @@ const PAGE = `<!doctype html>
       <div class="meta" id="modeMeta"></div>
 
       <div id="staticFields">
-        <label data-i18n="staticReplies"></label>
-        <div class="chips" id="staticRepliesChips"></div>
-        <div class="chip-add">
-          <input id="staticRepliesInput" data-i18n-ph="staticRepliesPh">
-          <button type="button" class="ghost" id="staticRepliesAddBtn" data-i18n="add"></button>
-        </div>
+        <label data-i18n="staticRules"></label>
+        <div class="meta" data-i18n="staticRulesHint"></div>
+        <div id="staticRules"></div>
+        <button type="button" class="ghost" id="addRuleBtn" data-i18n="addKeyword"></button>
       </div>
 
       <div id="aiFields">
@@ -262,13 +269,13 @@ const PAGE = `<!doctype html>
 
         <label data-i18n="persona"></label>
         <textarea id="persona"></textarea>
-      </div>
 
-      <label data-i18n="triggers"></label>
-      <div class="chips" id="triggersChips"></div>
-      <div class="chip-add">
-        <input id="triggersInput" data-i18n-ph="triggersPh">
-        <button type="button" class="ghost" id="triggersAddBtn" data-i18n="add"></button>
+        <label data-i18n="triggers"></label>
+        <div class="chips" id="triggersChips"></div>
+        <div class="chip-add">
+          <input id="triggersInput" data-i18n-ph="triggersPh">
+          <button type="button" class="ghost" id="triggersAddBtn" data-i18n="add"></button>
+        </div>
       </div>
 
       <label data-i18n="matchMode"></label>
@@ -318,8 +325,11 @@ const I18N = {
     modeStatic: 'Feste Texte',
     modeActiveAi: 'Aktiv: KI',
     modeActiveStatic: 'Aktiv: Feste Texte',
-    staticReplies: 'Feste Antworten',
-    staticRepliesPh: 'Antworttext eingeben',
+    staticRules: 'Feste Antworten je Stichwort',
+    staticRulesHint: 'Pro Stichwort mehrere Antworten — bei einem Treffer wird zufällig eine davon gewählt.',
+    addKeyword: '+ Stichwort',
+    ruleKeywordPh: 'Stichwort (z. B. Moin)',
+    ruleAnswerPh: 'Antwort eingeben',
     add: 'Hinzufügen',
     apiKey: 'OpenRouter API Key',
     keyNeeded: 'OpenRouter-Key nötig für den KI-Modus.',
@@ -367,8 +377,11 @@ const I18N = {
     modeStatic: 'Fixed texts',
     modeActiveAi: 'Active: AI',
     modeActiveStatic: 'Active: Fixed texts',
-    staticReplies: 'Fixed replies',
-    staticRepliesPh: 'Enter reply text',
+    staticRules: 'Fixed replies per keyword',
+    staticRulesHint: 'Several answers per keyword — one is picked at random when it matches.',
+    addKeyword: '+ Keyword',
+    ruleKeywordPh: 'Keyword (e.g. Moin)',
+    ruleAnswerPh: 'Enter an answer',
     add: 'Add',
     apiKey: 'OpenRouter API key',
     keyNeeded: 'OpenRouter key required for AI mode.',
@@ -415,6 +428,7 @@ function applyLang(lang) {
   $('langDe').classList.toggle('active', LANG === 'de');
   $('langEn').classList.toggle('active', LANG === 'en');
   // Re-render JS-driven strings in the new language.
+  renderRules();
   applyMode();
   renderModels();
   refresh();
@@ -446,8 +460,8 @@ let SAVED_FALLBACK = '';
 let MODELS_ERR = null;
 let API_KEY_SET = false;
 
-// Chip lists for triggers and static replies — the source of truth on save.
-const CHIPS = { triggers: [], staticReplies: [] };
+// Chip list for AI-mode triggers — the source of truth on save.
+const CHIPS = { triggers: [] };
 
 function renderChips(name) {
   const box = $(name + 'Chips');
@@ -479,11 +493,103 @@ function addChip(name) {
   input.focus();
 }
 
-['triggers', 'staticReplies'].forEach((name) => {
+['triggers'].forEach((name) => {
   $(name + 'AddBtn').addEventListener('click', () => addChip(name));
   $(name + 'Input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); addChip(name); }
   });
+});
+
+// Per-keyword static rules: [{ keyword, answers: [] }] — the source of truth on
+// save. Handlers capture the rule/answer by identity so add/remove stays correct
+// without re-rendering the whole list.
+let RULES = [];
+
+function answerChip(rule, ans) {
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  const label = document.createElement('span');
+  label.textContent = ans;
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.textContent = '×';
+  x.setAttribute('aria-label', 'remove');
+  x.addEventListener('click', () => {
+    const k = rule.answers.indexOf(ans);
+    if (k > -1) rule.answers.splice(k, 1);
+    chip.remove();
+  });
+  chip.appendChild(label);
+  chip.appendChild(x);
+  return chip;
+}
+
+function ruleCard(rule) {
+  const card = document.createElement('div');
+  card.className = 'rule';
+
+  const head = document.createElement('div');
+  head.className = 'rule-head';
+  const kw = document.createElement('input');
+  kw.type = 'text';
+  kw.value = rule.keyword;
+  kw.placeholder = t('ruleKeywordPh');
+  kw.addEventListener('input', () => { rule.keyword = kw.value; });
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'ghost rule-del';
+  del.textContent = '×';
+  del.addEventListener('click', () => {
+    const i = RULES.indexOf(rule);
+    if (i > -1) RULES.splice(i, 1);
+    card.remove();
+  });
+  head.appendChild(kw);
+  head.appendChild(del);
+
+  const chips = document.createElement('div');
+  chips.className = 'chips';
+  rule.answers.forEach((a) => chips.appendChild(answerChip(rule, a)));
+
+  const addRow = document.createElement('div');
+  addRow.className = 'chip-add';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = t('ruleAnswerPh');
+  const add = () => {
+    const v = inp.value.trim();
+    if (v && !rule.answers.includes(v)) {
+      rule.answers.push(v);
+      chips.appendChild(answerChip(rule, v));
+    }
+    inp.value = '';
+    inp.focus();
+  };
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'ghost';
+  addBtn.textContent = t('add');
+  addBtn.addEventListener('click', add);
+  addRow.appendChild(inp);
+  addRow.appendChild(addBtn);
+
+  card.appendChild(head);
+  card.appendChild(chips);
+  card.appendChild(addRow);
+  return card;
+}
+
+function renderRules() {
+  const box = $('staticRules');
+  box.innerHTML = '';
+  RULES.forEach((rule) => box.appendChild(ruleCard(rule)));
+}
+
+$('addRuleBtn').addEventListener('click', () => {
+  const rule = { keyword: '', answers: [] };
+  RULES.push(rule);
+  $('staticRules').appendChild(ruleCard(rule));
 });
 
 function applyMode() {
@@ -557,8 +663,8 @@ async function loadConfig() {
   renderChips('triggers');
   $('matchMode').value = c.matchMode || 'exact';
   $('replyMode').value = c.replyMode || 'ai';
-  CHIPS.staticReplies = (c.staticReplies || []).slice();
-  renderChips('staticReplies');
+  RULES = (c.staticRules || []).map((r) => ({ keyword: r.keyword || '', answers: (r.answers || []).slice() }));
+  renderRules();
   $('oncePerDay').checked = !!c.oncePerDay;
   $('activeStart').value = c.activeStart || '';
   $('activeEnd').value = c.activeEnd || '';
@@ -576,7 +682,8 @@ $('cfg').addEventListener('submit', async (e) => {
     triggers: CHIPS.triggers.slice(),
     matchMode: $('matchMode').value,
     replyMode: $('replyMode').value,
-    staticReplies: CHIPS.staticReplies.slice(),
+    staticRules: RULES.map((r) => ({ keyword: r.keyword.trim(), answers: r.answers.slice() }))
+      .filter((r) => r.keyword),
     oncePerDay: $('oncePerDay').checked,
     activeStart: $('activeStart').value,
     activeEnd: $('activeEnd').value,
