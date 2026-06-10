@@ -114,7 +114,7 @@ function ensureOneEmoji(text) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function systemPrompt() {
-  return `${cfg.persona}\nDu antwortest auf eine "Guten Morgen"-Nachricht. Halte es natuerlich, variiere die Formulierung jeden Tag, kein Smalltalk-Fragenkatalog. Beende mit genau einem einzigen, zur Antwort passenden Emoji. Nur die Antwort selbst, ohne Anfuehrungszeichen.`;
+  return `${cfg.persona}\nDu antwortest auf die eingehende Nachricht des Kontakts. Halte es natuerlich, variiere die Formulierung, kein Smalltalk-Fragenkatalog. Beende mit genau einem einzigen, zur Antwort passenden Emoji. Nur die Antwort selbst, ohne Anfuehrungszeichen.`;
 }
 
 async function callModel(model, incomingText) {
@@ -383,5 +383,5 @@ startServer({
 if (config.isConfigured(cfg)) {
   startSock();
 } else {
-  console.log('Not configured yet. Open the web UI to set the API key and target number.');
+  console.log('Not configured yet. Open the web UI to finish setup.');
 }
