@@ -9,7 +9,7 @@ Type=simple
 User=pi
 WorkingDirectory=/home/pi/autowhatsapper
 ExecStart=/usr/bin/node index.js
-Restart=on-failure
+Restart=always
 RestartSec=10
 # Settings live in config.json (written by the web UI); no env config needed.
 # UI binds to 127.0.0.1:8080 by default. To override (e.g. for LAN access or a
