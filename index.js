@@ -77,6 +77,28 @@ function markRepliedToday() {
   saveState(state);
 }
 
+// ---- Active time window ----------------------------------------------------
+// Parse "HH:MM" to minutes-since-midnight, or null if empty/invalid.
+function parseHM(s) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((s || '').trim());
+  if (!m) return null;
+  const h = +m[1], min = +m[2];
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// True if `now` (local time) falls inside the configured active window. An unset
+// or invalid start/end means "always active"; a window where start > end crosses
+// midnight (e.g. 22:00-06:00).
+function isWithinActiveWindow(now, cfg) {
+  const start = parseHM(cfg.activeStart);
+  const end = parseHM(cfg.activeEnd);
+  if (start === null || end === null || start === end) return true;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (start < end) return mins >= start && mins < end;
+  return mins >= start || mins < end; // crosses midnight
+}
+
 function setPending(at, text) {
   const state = loadState();
   state.pending = { at, text };
@@ -336,6 +358,10 @@ async function startSock() {
         msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
       if (!matchesTrigger(text, cfg)) continue;
+      if (!isWithinActiveWindow(new Date(), cfg)) {
+        console.log('Outside active window, not replying.');
+        continue;
+      }
       if (replyScheduled) continue; // a reply is already pending
       if (alreadyRepliedToday()) {
         console.log('Already replied today, skipping.');

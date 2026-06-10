@@ -18,6 +18,8 @@ const DEFAULTS = {
   matchMode: 'exact',
   replyMode: 'ai',
   staticReplies: [],
+  activeStart: '', // HH:MM; empty start/end = always active
+  activeEnd: '',
   lang: 'de',
 };
 
