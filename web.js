@@ -77,6 +77,8 @@ function startServer(hooks) {
           matchMode: c.matchMode,
           replyMode: c.replyMode,
           staticReplies: c.staticReplies,
+          activeStart: c.activeStart,
+          activeEnd: c.activeEnd,
           lang: c.lang,
           apiKeySet: Boolean(c.openrouterApiKey),
         });
@@ -107,6 +109,11 @@ function startServer(hooks) {
             .filter((s) => typeof s === 'string')
             .map((s) => s.trim())
             .filter(Boolean);
+        // Active window: accept HH:MM (24h) or empty (= always active).
+        const HM = /^([01]?\d|2[0-3]):[0-5]\d$/;
+        for (const k of ['activeStart', 'activeEnd'])
+          if (typeof body[k] === 'string' && (body[k] === '' || HM.test(body[k])))
+            patch[k] = body[k];
         // Only overwrite the key when a non-empty value is supplied.
         if (typeof body.openrouterApiKey === 'string' && body.openrouterApiKey.trim())
           patch.openrouterApiKey = body.openrouterApiKey.trim();
@@ -270,6 +277,14 @@ const PAGE = `<!doctype html>
         <option value="contains" data-i18n="matchContains"></option>
       </select>
 
+      <label data-i18n="activeWindow"></label>
+      <div class="row" style="margin-top:0">
+        <input id="activeStart" type="time">
+        <span style="color:#8b929c">–</span>
+        <input id="activeEnd" type="time">
+      </div>
+      <div class="meta" data-i18n="activeWindowHint"></div>
+
       <div class="row">
         <input id="oncePerDay" type="checkbox">
         <label style="margin:0" data-i18n="oncePerDay"></label>
@@ -324,6 +339,8 @@ const I18N = {
     matchExact: 'Exakt',
     matchContains: 'Enthält',
     oncePerDay: 'Nur auf die erste passende Nachricht pro Tag antworten',
+    activeWindow: 'Aktives Zeitfenster (leer = immer aktiv)',
+    activeWindowHint: 'Nur Nachrichten in diesem Fenster (Pi-Ortszeit) werden beantwortet. Über Mitternacht möglich (z. B. 22:00–06:00).',
     save: 'Speichern',
     saved: 'Gespeichert ✓',
     saveError: 'Fehler beim Speichern',
@@ -371,6 +388,8 @@ const I18N = {
     matchExact: 'Exact',
     matchContains: 'Contains',
     oncePerDay: 'Only reply to the first matching message per day',
+    activeWindow: 'Active time window (empty = always on)',
+    activeWindowHint: 'Only messages arriving in this window (Pi local time) are answered. May cross midnight (e.g. 22:00–06:00).',
     save: 'Save',
     saved: 'Saved ✓',
     saveError: 'Save failed',
@@ -541,6 +560,8 @@ async function loadConfig() {
   CHIPS.staticReplies = (c.staticReplies || []).slice();
   renderChips('staticReplies');
   $('oncePerDay').checked = !!c.oncePerDay;
+  $('activeStart').value = c.activeStart || '';
+  $('activeEnd').value = c.activeEnd || '';
   API_KEY_SET = !!c.apiKeySet;
   applyLang(c.lang || 'de');
 }
@@ -557,6 +578,8 @@ $('cfg').addEventListener('submit', async (e) => {
     replyMode: $('replyMode').value,
     staticReplies: CHIPS.staticReplies.slice(),
     oncePerDay: $('oncePerDay').checked,
+    activeStart: $('activeStart').value,
+    activeEnd: $('activeEnd').value,
     lang: LANG,
   };
   const key = $('openrouterApiKey').value.trim();
