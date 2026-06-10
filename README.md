@@ -148,7 +148,8 @@ your LAN with a firewall rule.
 | `config.js`              | Loads/saves the web-editable `config.json`                   |
 | `setup.js`               | Optional CLI first-run wizard (`npm run setup`)              |
 | `config.example.json`    | Shape of the generated `config.json` (placeholders only)     |
-| `autowhatsapper.service` | `systemd` unit for the Raspberry Pi                          |
+| `autowhatsapper.service` | Generic `systemd` unit for the Raspberry Pi                  |
+| `override.conf.example`  | Drop-in template for host-specific `systemd` settings        |
 | `DEPLOY.md`              | Step-by-step Pi deployment guide                             |
 
 Runtime files — `config.json` (your key + number), `auth/` (the WhatsApp

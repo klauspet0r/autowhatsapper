@@ -1,0 +1,15 @@
+# Drop-in for autowhatsapper.service — your host-specific settings.
+#
+# Install to:  /etc/systemd/system/autowhatsapper.service.d/override.conf
+# This file is yours; re-copying the tracked autowhatsapper.service on an update
+# never touches it. See DEPLOY.md.
+
+[Service]
+# REQUIRED — the user to run as and the path where you copied the code:
+User=pi
+WorkingDirectory=/home/pi/autowhatsapper
+
+# OPTIONAL — expose the web UI beyond localhost (default 127.0.0.1:8080).
+# Pair WEB_HOST=0.0.0.0 with a LAN-scoped firewall rule (see DEPLOY.md step 4).
+#Environment=WEB_HOST=0.0.0.0
+#Environment=WEB_PORT=8765
