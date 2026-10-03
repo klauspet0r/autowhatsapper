@@ -318,6 +318,29 @@ function resumePending() {
 }
 
 // ---- WhatsApp connection ---------------------------------------------------
+const RECONNECT_MIN_MS = 2000;
+const RECONNECT_MAX_MS = 60000;
+let reconnectDelay = 0;
+
+// startSock() fetches the Baileys version over the network, so it can reject.
+// Every call goes through connect(), otherwise an unhandled rejection would
+// leave the status stuck on 'closed' with nothing retrying.
+function connect() {
+  startSock().catch((err) => {
+    sock = null;
+    status.connection = 'closed';
+    status.lastError = `Connect failed: ${err.message}`;
+    console.log(`Connect failed: ${err.message}`);
+    scheduleReconnect();
+  });
+}
+
+// Retry with capped exponential backoff instead of hammering in a tight loop.
+function scheduleReconnect() {
+  reconnectDelay = reconnectDelay ? Math.min(reconnectDelay * 2, RECONNECT_MAX_MS) : RECONNECT_MIN_MS;
+  setTimeout(connect, reconnectDelay);
+}
+
 async function startSock() {
   if (sock) return;
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -341,21 +364,31 @@ async function startSock() {
     if (connection === 'open') {
       status.connection = 'open';
       status.qr = null;
+      status.lastError = null;
+      reconnectDelay = 0;
       console.log(`Connected. Watching for trigger-matching messages from ${cfg.targetNumber}.`);
       resumePending();
     }
 
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = code === DisconnectReason.loggedOut;
       sock = null;
-      status.connection = 'closed';
-      console.log(`Connection closed (code ${code}).${loggedOut ? ' Logged out.' : ' Reconnecting...'}`);
-      if (loggedOut) {
+
+      // A logged-out session is gone for good, but auth/ is kept: a spurious 401
+      // must not destroy working credentials. Recovery is the relink button,
+      // which the web UI shows for this state.
+      if (code === DisconnectReason.loggedOut) {
+        status.connection = 'loggedOut';
         status.qr = null;
-      } else {
-        startSock();
+        status.lastError = 'WhatsApp session expired - relink required';
+        console.log(`Connection closed (code ${code}). Logged out - relink required.`);
+        return;
       }
+
+      status.connection = 'closed';
+      status.lastError = `Connection closed (code ${code ?? 'unknown'})`;
+      console.log(`${status.lastError}. Reconnecting...`);
+      scheduleReconnect();
     }
   });
 
@@ -398,13 +431,14 @@ async function relink() {
   status.connection = 'closed';
   status.qr = null;
   fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-  startSock();
+  reconnectDelay = 0;
+  connect();
 }
 
 // Re-read config after the web UI saves; connect if we just became configured.
 function reload() {
   cfg = config.load();
-  if (config.isConfigured(cfg) && !sock) startSock();
+  if (config.isConfigured(cfg) && !sock) connect();
 }
 
 // ---- Wire up ---------------------------------------------------------------
@@ -421,7 +455,7 @@ startServer({
 });
 
 if (config.isConfigured(cfg)) {
-  startSock();
+  connect();
 } else {
   console.log('Not configured yet. Open the web UI to finish setup.');
 }
