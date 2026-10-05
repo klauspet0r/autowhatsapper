@@ -169,6 +169,7 @@ const PAGE = `<!doctype html>
   .dot { width: 10px; height: 10px; border-radius: 50%; background: #6b7280; flex: none; }
   .dot.open { background: #22c55e; } .dot.qr { background: #eab308; }
   .dot.connecting { background: #3b82f6; } .dot.closed { background: #ef4444; }
+  .dot.loggedOut { background: #ef4444; }
   .qrbox { text-align: center; margin-top: 14px; }
   .qrbox img { background: #fff; padding: 10px; border-radius: 10px; width: 264px; max-width: 100%; }
   .hint { color: #8b929c; font-size: 13px; margin-top: 10px; }
@@ -314,6 +315,7 @@ const I18N = {
     statusQr: 'QR scannen zum Verknüpfen',
     statusConnecting: 'Verbinde…',
     statusClosed: 'Getrennt',
+    statusLoggedOut: 'Session abgelaufen — neu verknüpfen',
     notConfigured: 'Nicht konfiguriert — bitte Einrichtung abschließen',
     qrHint: 'WhatsApp → Verknüpfte Geräte → Gerät verknüpfen → QR scannen',
     relink: 'Neu verknüpfen (abmelden)',
@@ -366,6 +368,7 @@ const I18N = {
     statusQr: 'Scan QR to link',
     statusConnecting: 'Connecting…',
     statusClosed: 'Disconnected',
+    statusLoggedOut: 'Session expired — relink needed',
     notConfigured: 'Not configured — please finish setup',
     qrHint: 'WhatsApp → Linked devices → Link a device → Scan QR',
     relink: 'Re-link (log out)',
@@ -438,13 +441,13 @@ async function refresh() {
   try {
     const s = await (await fetch('/api/state')).json();
     $('dot').className = 'dot ' + s.connection;
-    const statusKeys = { open:'statusOpen', qr:'statusQr', connecting:'statusConnecting', closed:'statusClosed' };
+    const statusKeys = { open:'statusOpen', qr:'statusQr', connecting:'statusConnecting', closed:'statusClosed', loggedOut:'statusLoggedOut' };
     let txt = statusKeys[s.connection] ? t(statusKeys[s.connection]) : s.connection;
     if (!s.configured) txt = t('notConfigured');
     $('statusText').textContent = txt;
     $('qrbox').style.display = s.qrImage ? 'block' : 'none';
     if (s.qrImage) $('qrimg').src = s.qrImage;
-    $('relink').style.display = s.connection === 'open' ? 'block' : 'none';
+    $('relink').style.display = s.connection === 'open' || s.connection === 'loggedOut' ? 'block' : 'none';
     $('sendNow').style.display = s.pendingReply ? 'block' : 'none';
     let meta = '';
     if (s.pendingReply) meta = t('metaPending') + s.pendingReply + t('metaPendingSuffix');
