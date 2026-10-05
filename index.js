@@ -261,7 +261,8 @@ async function fireReply() {
   const { incomingText, targetJid } = pendingContext;
   try {
     const reply = await produceReply(incomingText);
-    await sock.sendMessage(targetJid, { text: reply });
+    const sent = await sock.sendMessage(targetJid, { text: reply });
+    rememberSent(sent?.key?.id, sent?.message);
     markRepliedToday();
     status.lastReply = reply;
     status.lastError = null;
@@ -317,6 +318,31 @@ function resumePending() {
   armReply(pending.at, pending.text || '', `${cfg.targetNumber}@s.whatsapp.net`);
 }
 
+// ---- Sent-message store ----------------------------------------------------
+// A recipient that cannot decrypt a message asks the sender to send it again.
+// Baileys answers such a retry receipt by calling getMessage(), so without a
+// store of what was sent it resends nothing and the recipient is stuck on
+// "waiting for this message" forever.
+const SENT_CACHE_MAX = 256;
+const sentMessages = new Map(); // message id -> proto.IMessage
+
+function rememberSent(id, message) {
+  if (!id || !message) return;
+  sentMessages.set(id, message);
+  // Oldest first, so deleting from the front evicts the oldest entry.
+  while (sentMessages.size > SENT_CACHE_MAX) {
+    sentMessages.delete(sentMessages.keys().next().value);
+  }
+}
+
+async function getMessage(key) {
+  const message = sentMessages.get(key.id);
+  if (!message) {
+    console.log(`Retry requested for message ${key.id}, not in store - cannot resend.`);
+  }
+  return message;
+}
+
 // ---- WhatsApp connection ---------------------------------------------------
 const RECONNECT_MIN_MS = 2000;
 const RECONNECT_MAX_MS = 60000;
@@ -348,7 +374,13 @@ async function startSock() {
 
   // markOnlineOnConnect: false keeps the phone receiving push notifications;
   // otherwise the always-on linked device looks "online" and WhatsApp suppresses them.
-  sock = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }), markOnlineOnConnect: false });
+  sock = makeWASocket({
+    version,
+    auth: state,
+    logger: pino({ level: 'silent' }),
+    markOnlineOnConnect: false,
+    getMessage,
+  });
   status.connection = 'connecting';
 
   sock.ev.on('creds.update', saveCreds);
