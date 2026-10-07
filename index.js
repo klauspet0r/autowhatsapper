@@ -21,7 +21,7 @@ const status = { connection: 'closed', qr: null, lastReply: null, lastError: nul
 let sock = null;
 let replyScheduled = false; // a delayed reply is currently pending
 let replyTimer = null; // setTimeout handle for the pending reply
-let pendingContext = null; // { incomingText, targetJid } for the pending reply
+let pendingContext = null; // { incomingText, replyJid } for the pending reply
 
 // Wait a random 5-30 min after a match before replying, so it doesn't look automated.
 const MIN_DELAY_MS = 5 * 60 * 1000;
@@ -109,9 +109,9 @@ function isWithinActiveWindow(now, cfg) {
   return mins >= start || mins < end; // crosses midnight
 }
 
-function setPending(at, text) {
+function setPending(at, text, jid) {
   const state = loadState();
-  state.pending = { at, text };
+  state.pending = { at, text, jid };
   saveState(state);
 }
 
@@ -258,10 +258,10 @@ async function getModels() {
 // the scheduled timer and the manual "send now" path.
 async function fireReply() {
   if (!pendingContext) return;
-  const { incomingText, targetJid } = pendingContext;
+  const { incomingText, replyJid } = pendingContext;
   try {
     const reply = await produceReply(incomingText);
-    const sent = await sock.sendMessage(targetJid, { text: reply });
+    const sent = await sock.sendMessage(replyJid, { text: reply });
     rememberSent(sent?.key?.id, sent?.message);
     markRepliedToday();
     status.lastReply = reply;
@@ -279,9 +279,9 @@ async function fireReply() {
   }
 }
 
-function armReply(at, incomingText, targetJid) {
+function armReply(at, incomingText, replyJid) {
   replyScheduled = true;
-  pendingContext = { incomingText, targetJid };
+  pendingContext = { incomingText, replyJid };
   status.pendingReply = new Date(at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const remaining = Math.max(0, at - Date.now());
   console.log(`Reply armed for ${status.pendingReply} (in ${Math.round(remaining / 60000)} min).`);
@@ -298,11 +298,11 @@ async function sendPendingNow() {
   return true;
 }
 
-function scheduleReply(incomingText, targetJid) {
+function scheduleReply(incomingText, replyJid) {
   const delay = MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1));
   const at = Date.now() + delay;
-  setPending(at, incomingText);
-  armReply(at, incomingText, targetJid);
+  setPending(at, incomingText, replyJid);
+  armReply(at, incomingText, replyJid);
 }
 
 // On (re)connect, resume a reply that was scheduled before a restart.
@@ -315,7 +315,8 @@ function resumePending() {
     clearPending();
     return;
   }
-  armReply(pending.at, pending.text || '', `${cfg.targetNumber}@s.whatsapp.net`);
+  // State written before the address was persisted falls back to the old behaviour.
+  armReply(pending.at, pending.text || '', pending.jid || `${cfg.targetNumber}@s.whatsapp.net`);
 }
 
 // ---- Sent-message store ----------------------------------------------------
@@ -437,6 +438,10 @@ async function startSock() {
         msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
       if (!matchedKeyword(text, cfg)) continue;
+      // WhatsApp may address this chat by @lid or by phone number. Replying to a
+      // JID rebuilt from config can hit a different signal session than the one
+      // the message arrived on, which the recipient then cannot decrypt.
+      console.log(`Trigger from remoteJid=${msg.key.remoteJid} senderPn=${msg.key.senderPn || '-'}`);
       if (!isWithinActiveWindow(new Date(), cfg)) {
         console.log('Outside active window, not replying.');
         continue;
@@ -447,7 +452,7 @@ async function startSock() {
         continue;
       }
 
-      scheduleReply(text, targetJid);
+      scheduleReply(text, msg.key.remoteJid);
     }
   });
 }
